@@ -1,0 +1,572 @@
+================================================================================
+TICKET MARKET INTELLIGENCE PLATFORM
+FIRST DEVELOPMENT PLAN — BACKEND PIPELINE
+Date: 2026-07-24
+================================================================================
+
+This document captures every design decision, architecture choice, tool
+selection, and rationale made during the first development session of the
+Ticket Market Intelligence Platform backend. It is the authoritative record
+for Phase 1 of development.
+
+--------------------------------------------------------------------------------
+1. WHAT WE ARE BUILDING IN THIS PHASE
+--------------------------------------------------------------------------------
+
+Scope: Backend data pipeline only. No API server. No web frontend.
+
+Goal: A production-quality ETL pipeline that:
+  - Reads raw JSON output from Apify (Facebook Marketplace scraper)
+  - Validates each record against a defined schema
+  - Loads valid records as-is into a PostgreSQL "raw" (Bronze) table
+  - Reads from the raw table, applies all transformations and enrichments
+  - Writes the enriched data to a "transformed" (Silver) table
+  - Tracks every pipeline run with full audit metadata
+  - Records every error with the original raw data for re-processing
+
+Event scope: VELD Music Festival 2026 (Toronto, ON)
+Data source: Apify "raider" Facebook Marketplace scraper output (JSON)
+
+--------------------------------------------------------------------------------
+2. KEY FINDINGS FROM SAMPLE DATA ANALYSIS
+--------------------------------------------------------------------------------
+
+Source file: sample_data/apify_raider-api.json
+Total records: 720
+  - Error records (Apify failed to scrape): 68
+      - bad_input (Facebook redirected to login): 54
+      - dead_page (listing no longer exists): 13
+      - ETIMEDOUT: 1
+  - Successful records: 652
+
+Apify record structure (successful records):
+  url             - Facebook listing URL (contains listing ID)
+  product_id      - Facebook's own listing ID (e.g., "2468737636922220")
+  profile_id      - Seller's Facebook profile ID (present on all 652 records)
+  title           - Listing title (noisy, requires NLP extraction)
+  description     - Full listing description text
+  initial_price   - Original asking price (numeric, already parsed by Apify)
+  final_price     - Current price (numeric, already parsed)
+  currency        - Always "CAD" in this dataset
+  condition       - "New" or "Used"
+  location        - Raw location string: "Toronto, ON"
+  images          - Array of image CDN URLs
+  is_sold         - Boolean (all false in this snapshot)
+  listing_date    - ISO 8601 datetime string of when seller posted
+  timestamp       - ISO 8601 datetime of when Apify scraped
+  discovery_input - Metadata: {keyword, city, radius, date_listed}
+  input           - SENSITIVE: contains Facebook session cookies — STRIPPED
+
+Price analysis:
+  - Min: $0, Max: $49,950,000 (garbage outliers — need price range filter)
+  - $1 listings: 32 (promoters and "wanted" buyer posts)
+  - Price drops (initial != final): 81 records — both values preserved
+  - Irrelevant listings mixed in: clothes, crystals, random items
+    (Facebook search returns non-ticket results for keyword "veld")
+
+Critical design implications:
+  1. Cookies in `input` field MUST be stripped before storing raw_payload
+  2. A relevance filter is required (not all results are ticket listings)
+  3. Price sanity bounds must be configurable, not hardcoded
+  4. Both initial_price AND final_price must be stored (captures price drops)
+  5. profile_id gives us a seller ID for future seller scoring
+
+--------------------------------------------------------------------------------
+3. TOOL AND TECHNOLOGY DECISIONS
+--------------------------------------------------------------------------------
+
+3a. ORM vs Pure SQL vs dbt — Decision: SQLAlchemy ORM + Alembic
+
+Three options were evaluated:
+
+OPTION A — SQLAlchemy ORM + Alembic
+  Tables are defined as Python classes. Alembic manages schema migrations.
+  Pros: Python-native, type-safe, IDE support, Alembic gives git-like
+        schema history, clean Pydantic integration.
+  Cons: ORM abstraction adds a layer of magic; generated SQL can be
+        non-obvious for complex queries.
+  Best for: Python-first teams, OLTP workloads, 2-10 tables.
+
+OPTION B — Pure SQL + psycopg2/psycopg3
+  Raw SQL strings executed via a DB driver. Migrations managed manually.
+  Pros: Full control, no magic, best raw performance.
+  Cons: SQL strings in Python are messy. Manual migration management
+        breaks down quickly. No type safety. High boilerplate.
+  Best for: Simple one-off scripts; stops scaling well past 3-4 tables.
+
+OPTION C — dbt (Data Build Tool)
+  SQL SELECT models that dbt compiles and runs. Handles dependencies,
+  testing, documentation, and lineage automatically.
+  Pros: The transform step (raw → transformed) is exactly dbt's design
+        purpose. Built-in null/uniqueness/accepted-value tests. Industry
+        standard for analytics engineering. Automatic docs.
+  Cons: Doesn't handle ingestion — Python still required for loading raw
+        data. Adds another CLI tool to manage. Overkill for 2-3 tables.
+        Requires a running DB to operate against.
+  Best for: 5+ interdependent SQL models, analytics engineering, when
+            transformation is SQL-heavy with many CTEs and joins.
+
+DECISION: SQLAlchemy ORM + Alembic for Phase 1.
+PLAN: Introduce dbt at Phase 4-5 for the transformation layer when we
+      have multiple events, multiple sources, and complex analytics models.
+      dbt and SQLAlchemy co-exist without conflict — dbt reads from tables
+      that Python writes to.
+
+3b. Python version: 3.12
+3c. Package manager: pip with pyproject.toml (PEP 517/518 compliant)
+3d. Project layout: src/ layout (src/ticket_tracker/) — industry standard
+    that prevents accidental imports of the local package during testing.
+
+Full dependency list:
+  sqlalchemy>=2.0        — ORM, SQLAlchemy 2.0 style (Mapped, mapped_column)
+  alembic>=1.13          — database migrations
+  psycopg2-binary>=2.9   — PostgreSQL driver
+  pydantic>=2.0          — data validation and transformation schemas
+  pydantic-settings>=2.0 — settings loaded from .env file
+  loguru>=0.7            — structured, colorized logging
+  rich>=13.0             — terminal tables and progress output
+  click>=8.1             — CLI argument parsing
+  python-dotenv>=1.0     — .env file loading
+
+--------------------------------------------------------------------------------
+4. ARCHITECTURE: TWO-STAGE MEDALLION PIPELINE
+--------------------------------------------------------------------------------
+
+This follows the Bronze / Silver pattern, a standard in data engineering.
+
+  BRONZE (raw)     — data ingested as-is from source, validated structurally
+  SILVER (transformed) — data cleaned, enriched, flagged, business-logic applied
+
+STAGE 1 — EXTRACT & LOAD (Bronze)
+  Input:  Apify JSON file (720 records)
+  Steps:
+    1. reader.py    — iterate records, detect and skip Apify error records
+    2. validator.py — check required fields, validate URL pattern, check types
+    3. loader.py    — upsert to veld_2026_raw (dedup by listing_url)
+    4. audit.py     — write pipeline_runs record and pipeline_errors records
+  Output: veld_2026_raw rows + pipeline_runs + pipeline_errors
+
+STAGE 2 — TRANSFORM & LOAD (Silver)
+  Input:  veld_2026_raw rows (those not yet in veld_2026_transformed)
+  Steps:
+    1. reader.py          — LEFT JOIN to find untransformed raw records
+    2. transformers/
+       price.py           — parse numeric, compute per-unit, detect anomalies
+       location.py        — extract city/province, map to GTA region
+       ticket.py          — extract quantity, ticket_type, event_days
+       flags.py           — determine listing_type, is_relevant
+    3. validator.py       — validate transformed output before writing
+    4. loader.py          — insert to veld_2026_transformed
+    5. audit.py           — write pipeline_runs record and pipeline_errors
+  Output: veld_2026_transformed rows + audit records
+
+FULL DATA FLOW:
+
+  JSON File (Apify output)
+      │
+      ▼
+  [Stage 1: Extract & Load]
+  reader.py → validator.py → loader.py
+      │                          │
+      │                          ▼
+      │                    veld_2026_raw
+      │                          │
+      ▼                          ▼
+  pipeline_errors         [Stage 2: Transform]
+  pipeline_runs       reader.py → transformers → validator.py → loader.py
+                                                                     │
+                                                                     ▼
+                                                         veld_2026_transformed
+                                                                     │
+                                                                     ▼
+                                                               pipeline_runs
+                                                               pipeline_errors
+
+--------------------------------------------------------------------------------
+5. PROJECT STRUCTURE
+--------------------------------------------------------------------------------
+
+ticket_tracker/                       (project root)
+├── pyproject.toml                    deps + metadata + scripts
+├── .env.example                      template — committed to git
+├── .env                              real secrets — gitignored
+├── .gitignore
+├── alembic.ini                       Alembic configuration
+├── alembic/
+│   ├── env.py                        Alembic runtime environment
+│   ├── script.py.mako                migration file template
+│   └── versions/
+│       ├── 0001_create_audit_tables.py
+│       ├── 0002_create_veld_2026_raw.py
+│       └── 0003_create_veld_2026_transformed.py
+└── src/
+    └── ticket_tracker/
+        ├── __init__.py
+        ├── config.py                 pydantic-settings: reads .env
+        ├── db/
+        │   ├── __init__.py
+        │   ├── base.py               SQLAlchemy DeclarativeBase
+        │   ├── engine.py             engine + SessionLocal factory
+        │   └── models/
+        │       ├── __init__.py       imports all models (for Alembic)
+        │       ├── audit.py          PipelineRun, PipelineErrorLog
+        │       ├── raw.py            Veld2026Raw
+        │       └── transformed.py    Veld2026Transformed
+        ├── pipeline/
+        │   ├── __init__.py
+        │   ├── errors.py             ErrorCode enum + PipelineError exception
+        │   ├── stage1_extract/
+        │   │   ├── __init__.py
+        │   │   ├── reader.py         reads JSON, yields raw dicts
+        │   │   ├── validator.py      validates required fields + types
+        │   │   └── loader.py         upserts to veld_2026_raw
+        │   ├── stage2_transform/
+        │   │   ├── __init__.py
+        │   │   ├── reader.py         reads untransformed raw rows
+        │   │   ├── validator.py      validates transformed output
+        │   │   ├── loader.py         inserts to veld_2026_transformed
+        │   │   └── transformers/
+        │   │       ├── __init__.py
+        │   │       ├── price.py      price parsing, per-unit, anomaly flag
+        │   │       ├── location.py   city/province/region extraction
+        │   │       ├── ticket.py     quantity, ticket_type, event_days
+        │   │       └── flags.py      listing_type, is_relevant
+        │   └── orchestrator.py       runs stage1 → stage2, manages audit
+        └── run_pipeline.py           click CLI entry point
+
+--------------------------------------------------------------------------------
+6. DATABASE TABLES — FULL SCHEMA
+--------------------------------------------------------------------------------
+
+6a. pipeline_runs — one row per pipeline execution
+
+  id                UUID        primary key, auto-generated
+  stage             TEXT        'stage1_extract' | 'stage2_transform'
+  source_file       TEXT        path/filename of input source
+  status            TEXT        'running' | 'completed' | 'failed'
+  started_at        TIMESTAMPTZ auto-set on insert
+  finished_at       TIMESTAMPTZ set on completion
+  total_records     BIGINT      total records seen
+  success_count     BIGINT      records successfully processed
+  error_count       BIGINT      records that errored
+  skipped_count     BIGINT      records skipped (e.g. stage2 already done)
+  error_breakdown   JSONB       {"APIFY_ERROR": 54, "MISSING_FIELD": 3}
+  config            JSONB       thresholds and settings used for this run
+  created_at        TIMESTAMPTZ auto-set on insert
+
+6b. pipeline_errors — one row per failed record
+
+  id                BIGSERIAL   primary key
+  pipeline_run_id   UUID        → pipeline_runs.id
+  stage             TEXT        which stage produced this error
+  error_code        TEXT        from ErrorCode enum
+  error_message     TEXT        human-readable description
+  source_identifier TEXT        the url or product_id of the bad record
+  raw_data          JSONB       full original record (for re-processing)
+  created_at        TIMESTAMPTZ auto-set on insert
+
+6c. veld_2026_raw — Bronze layer, one row per unique Facebook listing
+
+  id                BIGSERIAL   primary key
+  pipeline_run_id   UUID        → pipeline_runs.id
+  fb_listing_id     TEXT        NOT NULL — Facebook's listing ID
+  listing_url       TEXT        NOT NULL UNIQUE — deduplication key
+  seller_profile_id TEXT        Facebook seller profile ID
+  title             TEXT        listing title as scraped
+  description       TEXT        full description text
+  initial_price     NUMERIC     original asking price
+  final_price       NUMERIC     current price (may differ from initial)
+  currency          TEXT        always 'CAD'
+  condition         TEXT        'New' | 'Used' | null
+  location_raw      TEXT        "Toronto, ON" as scraped
+  image_urls        JSONB       array of CDN image URLs
+  is_sold           BOOLEAN     default false
+  listed_at         TIMESTAMPTZ when seller originally posted
+  scraped_at        TIMESTAMPTZ when Apify scraped this listing
+  search_keyword    TEXT        the keyword used in discovery (e.g., "veld")
+  search_city       TEXT        the city used in discovery (e.g., "toronto")
+  raw_payload       JSONB       full original record, cookies stripped
+  first_seen_at     TIMESTAMPTZ set on first INSERT, never updated
+  last_seen_at      TIMESTAMPTZ updated on every re-scrape
+  created_at        TIMESTAMPTZ auto-set on insert
+  updated_at        TIMESTAMPTZ auto-updated on upsert
+
+  Indexes:
+    uq_veld_2026_raw_listing_url      UNIQUE (listing_url)
+    idx_veld_2026_raw_fb_listing_id   (fb_listing_id)
+    idx_veld_2026_raw_seller          (seller_profile_id)
+    idx_veld_2026_raw_listed_at       (listed_at)
+    idx_veld_2026_raw_run             (pipeline_run_id)
+
+6d. veld_2026_transformed — Silver layer, enriched and flagged
+
+  id                BIGSERIAL   primary key
+  raw_id            BIGINT      UNIQUE → veld_2026_raw.id (1:1 relationship)
+  pipeline_run_id   UUID        → pipeline_runs.id
+
+  -- Identity (carried from raw unchanged)
+  fb_listing_id     TEXT
+  listing_url       TEXT
+  seller_profile_id TEXT
+  title             TEXT
+  description       TEXT
+  currency          TEXT        default 'CAD'
+  is_sold           BOOLEAN     default false
+  listed_at         TIMESTAMPTZ
+  scraped_at        TIMESTAMPTZ
+  search_keyword    TEXT
+  image_urls        JSONB
+
+  -- Price (computed)
+  initial_price     NUMERIC(12,2)   original ask
+  price             NUMERIC(12,2)   current price
+  price_per_unit    NUMERIC(12,2)   price / quantity
+  price_drop        NUMERIC(12,2)   initial_price - price (0 if no drop)
+  price_drop_pct    NUMERIC(6,2)    percentage reduction
+  price_is_anomaly  BOOLEAN         true if price outside configured range
+
+  -- Location (parsed from "Toronto, ON")
+  location_raw      TEXT
+  location_city     TEXT            "Toronto"
+  location_province TEXT            "ON"
+  location_region   TEXT            GTA region bucket (see mapping below)
+
+  -- Ticket intelligence (extracted from title via regex)
+  quantity          INT             number of tickets (default 1)
+  ticket_type       TEXT            'GA' | 'VIP' | 'UNKNOWN'
+  event_days        JSONB           ["Friday"] | ["Saturday","Sunday"] | etc.
+  ticket_type_raw   TEXT            raw phrase matched from title (for audit)
+
+  -- Classification flags
+  listing_type      TEXT            'resale' | 'promoter' | 'wanted' | 'irrelevant'
+  is_relevant       BOOLEAN         passed relevance filter
+  condition         TEXT
+
+  created_at        TIMESTAMPTZ
+
+  Indexes:
+    uq_veld_2026_transformed_raw_id          UNIQUE (raw_id)
+    idx_veld_2026_transformed_listing_type   (listing_type)
+    idx_veld_2026_transformed_price          (price)
+    idx_veld_2026_transformed_listed_at      (listed_at)
+
+--------------------------------------------------------------------------------
+7. ERROR CLASSIFICATION SYSTEM
+--------------------------------------------------------------------------------
+
+All error codes are defined as a StrEnum in pipeline/errors.py.
+This is the single place to add, remove, or review error definitions.
+
+STAGE 1 ERROR CODES:
+
+  APIFY_ERROR
+    When:    The Apify record itself contains an "error" field.
+    Subtypes: bad_input (login redirect), dead_page (listing deleted),
+              ETIMEDOUT (network timeout)
+    Action:  Log to pipeline_errors. Do not attempt to process.
+
+  MISSING_REQUIRED_FIELD
+    When:    url, product_id, or final_price is null or missing.
+    Action:  Log to pipeline_errors with field name in message.
+
+  INVALID_URL
+    When:    URL does not match facebook.com/marketplace/item/{id} pattern.
+    Action:  Log to pipeline_errors. Indicates scraper format change.
+
+  DUPLICATE_SAME_RUN
+    When:    Same listing_url appears more than once in a single input file.
+    Action:  Log second occurrence to pipeline_errors. First occurrence loads.
+
+  JSON_DECODE_ERROR
+    When:    Record-level JSON is malformed (should be rare with Apify output).
+    Action:  Log to pipeline_errors.
+
+STAGE 2 ERROR CODES:
+
+  PRICE_PARSE_ERROR
+    When:    Cannot convert price value to a numeric type.
+    Action:  Log to pipeline_errors. Record not written to transformed.
+
+  LOCATION_PARSE_ERROR
+    When:    Cannot extract city and province from location_raw string.
+    Action:  Record still written to transformed with nulls for parsed fields.
+             Logged as a warning, not a hard error.
+
+  DATE_PARSE_ERROR
+    When:    Cannot parse listing_date string to datetime.
+    Action:  Record written with listed_at = null. Logged as warning.
+
+  PRICE_RANGE_ANOMALY
+    When:    price <= price_min OR price > price_max (from config).
+             Default: price_min=5.0, price_max=5000.0
+    Action:  Record STILL written to transformed with price_is_anomaly=true.
+             User can filter using WHERE NOT price_is_anomaly. Not an error
+             that prevents writing — it is a data quality flag.
+
+  TRANSFORM_FAILED
+    When:    An unexpected exception occurs during transformation.
+    Action:  Log to pipeline_errors with full traceback. Record not written.
+
+NOTE on PRICE_RANGE_ANOMALY vs hard errors:
+  Records with anomalous prices ARE written to transformed. This is intentional.
+  The analyst can see them, investigate them, and decide. Hard errors (records
+  NOT written to transformed) are only those where the data is structurally
+  broken and cannot be meaningfully represented in the target schema.
+
+--------------------------------------------------------------------------------
+8. TRANSFORMATION LOGIC DETAILS
+--------------------------------------------------------------------------------
+
+8a. Price Transformer (transformers/price.py)
+  - initial_price and final_price already numeric from Apify — no string parsing
+  - price_drop = initial_price - final_price (0 if initial == final or initial null)
+  - price_drop_pct = (price_drop / initial_price) * 100 (0 if no initial)
+  - price_per_unit = price / quantity (computed after ticket.py runs)
+  - price_is_anomaly = price <= config.price_min OR price > config.price_max
+
+8b. Location Transformer (transformers/location.py)
+  - Input: "Toronto, ON" (pattern: "City, Province")
+  - Split on ", " — index 0 is city, index 1 is province
+  - City → region via GTA_REGION_MAP lookup:
+      Toronto, North York, Scarborough, Etobicoke → "Toronto"
+      Mississauga, Brampton, Oakville, Burlington, Halton Hills → "West GTA"
+      Richmond Hill, Markham, Vaughan, Thornhill, Woodbridge → "North GTA"
+      Pickering, Ajax, Whitby, Oshawa, Clarington, Durham → "East GTA"
+      Hamilton, Niagara Falls, St. Catharines, Guelph, Kitchener → "Outside GTA"
+      Anything not in the map → "Unknown"
+
+8c. Ticket Transformer (transformers/ticket.py)
+  Quantity extraction (applied in order, first match wins):
+    Pattern "(\d+)\s*x\b"          → int(group(1))     "2x" → 2
+    Pattern "(\d+)\s*tickets?"      → int(group(1))     "2 tickets" → 2
+    Pattern "(\d+)\s*passes?"       → int(group(1))     "3 passes" → 3
+    Pattern "(\d+)\s*wristbands?"   → int(group(1))     "2 wristbands" → 2
+    Pattern "pair|couple"           → 2
+    Pattern "3[\s-]day|three[\s-]day" → 1  (1 ticket covering 3 days)
+    Default                         → 1
+
+  Ticket type extraction:
+    "VIP" (case-insensitive) in title → "VIP"
+    "GA" or "general admission" in title → "GA"
+    Otherwise → "UNKNOWN"
+
+  Event days extraction (all that match, combined):
+    "friday|fri\b"   → "Friday"
+    "saturday|sat\b" → "Saturday"
+    "sunday|sun\b"   → "Sunday"
+    "3[\s-]day|three[\s-]day|full weekend" → ["Friday","Saturday","Sunday"]
+    Empty if none matched
+
+8d. Flags (transformers/flags.py)
+  is_relevant:
+    True if "veld" is present (case-insensitive) in the title.
+    False otherwise → listing_type forced to "irrelevant".
+
+  listing_type (evaluated in order after is_relevant check):
+    "irrelevant"  if not is_relevant
+    "promoter"    if price <= 1.0 OR "promoter" in title/desc (case-insensitive)
+                  OR "INK promoter" in title/desc
+    "wanted"      if any of these in title (case-insensitive):
+                  "looking for", "wtb", "want to buy", "need tickets",
+                  "iso ", "in search of"
+    "resale"      default — passed all other checks
+
+--------------------------------------------------------------------------------
+9. PIPELINE RUN BEHAVIOUR
+--------------------------------------------------------------------------------
+
+Stage 1 — re-running the same file:
+  - Records already in veld_2026_raw (by listing_url) are UPDATED:
+    last_seen_at, updated_at, is_sold, final_price, image_urls are refreshed.
+  - first_seen_at is NEVER overwritten (preserved on conflict).
+  - Duplicate URLs within the same file are logged to pipeline_errors as
+    DUPLICATE_SAME_RUN. Only the first occurrence is loaded.
+
+Stage 2 — re-running:
+  - Only raw records WITHOUT a corresponding transformed record are processed.
+  - The query: SELECT r.* FROM veld_2026_raw r LEFT JOIN veld_2026_transformed t
+                ON t.raw_id = r.id WHERE t.id IS NULL
+  - Re-transforming existing records requires manually deleting from
+    veld_2026_transformed first (a --force flag can be added later).
+
+--------------------------------------------------------------------------------
+10. CLI USAGE
+--------------------------------------------------------------------------------
+
+Setup:
+  pip install -e .
+  cp .env.example .env
+  # Edit .env with your DATABASE_URL
+  alembic upgrade head
+
+Run full pipeline:
+  python -m ticket_tracker.run_pipeline --file sample_data/apify_raider-api.json
+
+Run stage 1 only:
+  python -m ticket_tracker.run_pipeline --file sample_data/apify_raider-api.json --stage stage1
+
+Run stage 2 only (reads from DB, no file needed):
+  python -m ticket_tracker.run_pipeline --stage stage2
+
+Expected output:
+  ─────────────────── STAGE 1: Extract & Load Raw ───────────────────
+    Source       : apify_raider-api.json
+    Total        : 720
+    ✓ Loaded     : 648
+    ✗ Errors     : 68
+      APIFY_ERROR              : 67
+      MISSING_REQUIRED_FIELD   :  1
+    Run ID       : 3f2a1c9e-...
+
+  ─────────────────── STAGE 2: Transform ────────────────────────────
+    Raw records  : 648
+    ✓ Transformed: 631
+      resale     : 521
+      promoter   :  32
+      wanted     :  12
+      irrelevant :  66
+    ✗ Errors     :  17
+      PRICE_RANGE_ANOMALY      : 14
+      LOCATION_PARSE_ERROR     :  3
+    Run ID       : 4a3b2c1d-...
+
+  ─────────────────── Done in 2.4s ──────────────────────────────────
+
+--------------------------------------------------------------------------------
+11. WHAT IS NOT IN SCOPE FOR THIS PHASE
+--------------------------------------------------------------------------------
+
+These are intentionally excluded to keep Phase 1 focused:
+
+  - No API server (FastAPI endpoints come in Phase 2)
+  - No web frontend
+  - No Celery/Redis/task queue
+  - No automatic scheduling (pipeline is triggered manually via CLI)
+  - No price snapshots table (added when we start repeated live polling)
+  - No event matching (veld_2026 tables are implicitly VELD-only)
+  - No deduplication across multiple sellers (same ticket, multiple posts)
+  - No scam scoring
+  - No price prediction
+
+--------------------------------------------------------------------------------
+12. MIGRATION PATH TO DBT (FUTURE)
+--------------------------------------------------------------------------------
+
+When to introduce dbt:
+  - Phase 4-5, when there are 5+ events tracked simultaneously
+  - When transformation SQL becomes complex (many CTEs, window functions)
+  - When you want standardized data quality tests across all events
+  - When the analytics/reporting layer needs its own SQL models
+
+How dbt will co-exist:
+  - Python pipeline continues to handle raw ingestion (Bronze layer)
+  - dbt takes over the Silver and Gold transformation layers
+  - dbt reads from veld_2026_raw (and other raw tables) using {{ source() }}
+  - dbt writes to dbt-managed schemas (e.g., silver.veld_2026_transformed)
+  - SQLAlchemy/Alembic continue managing the raw ingestion tables
+
+No changes to the Phase 1 code will be required when dbt is introduced.
+
+================================================================================
+END OF FIRST DEVELOPMENT PLAN
+================================================================================

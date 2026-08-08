@@ -11,14 +11,5 @@ class Settings(BaseSettings):
 
     database_url: PostgresDsn
 
-    # Price anomaly thresholds — listings outside this range are flagged
-    # but still written to veld_2026_transformed with price_is_anomaly=True.
-    price_min: float = 5.0
-    price_max: float = 5000.0
-
-    # DB write batch sizes
-    stage1_batch_size: int = 100
-    stage2_batch_size: int = 100
-
 
 settings = Settings()

@@ -1,5 +1,6 @@
 # Environment
 .env
+.env.example
 
 # Python
 __pycache__/
@@ -22,3 +23,6 @@ env/
 # OS
 .DS_Store
 Thumbs.db
+
+# Data
+sample_data/

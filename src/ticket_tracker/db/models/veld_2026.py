@@ -17,6 +17,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
@@ -25,45 +26,81 @@ from ticket_tracker.db.base import Base
 
 
 class Veld2026Raw(Base):
-    __tablename__ = "veld_2026_raw"
+    __tablename__ = "veld_2026_raw_extract"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     pipeline_run_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
 
-    # --- Direct from Apify (stored as-is, cookies stripped) ---
     fb_listing_id: Mapped[str] = mapped_column(Text, nullable=False)
     listing_url: Mapped[str] = mapped_column(Text, nullable=False)
     seller_profile_id: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     title: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    initial_price: Mapped[Optional[Decimal]] = mapped_column(
-        Numeric(12, 2), nullable=True
-    )
-    final_price: Mapped[Optional[Decimal]] = mapped_column(
-        Numeric(12, 2), nullable=True
-    )
-    currency: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
-    condition: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
-    location_raw: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    price: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 2), nullable=True)
+    location_city: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    location_state: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     image_urls: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True)
     is_sold: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    listed_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-    scraped_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-    search_keyword: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    search_city: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    listed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    scraped_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     raw_payload: Mapped[dict] = mapped_column(JSONB, nullable=False)
 
-    # --- Ingestion metadata ---
-    first_seen_at: Mapped[datetime] = mapped_column(
+    # CDC timestamps — valid_to IS NULL means this is the current version
+    valid_from: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
-    last_seen_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=func.now()
+    valid_to: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["pipeline_run_id"],
+            ["pipeline_runs.id"],
+            name="fk_veld_2026_raw_run_id",
+        ),
+        Index("idx_veld_2026_raw_fb_listing_id", "fb_listing_id"),
+        Index("idx_veld_2026_raw_listed_at", "listed_at"),
+        Index("idx_veld_2026_raw_run", "pipeline_run_id"),
+        # Partial index — fast lookup of the current version of each URL
+        Index(
+            "idx_veld_2026_raw_current_url",
+            "listing_url",
+            postgresql_where=text("valid_to IS NULL"),
+        ),
     )
+
+
+class Veld2026Transformed(Base):
+    __tablename__ = "veld_2026_transformed"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    raw_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    pipeline_run_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+
+    fb_listing_id: Mapped[str] = mapped_column(Text, nullable=False)
+    listing_url: Mapped[str] = mapped_column(Text, nullable=False)
+    seller_profile_id: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    title: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    currency: Mapped[str] = mapped_column(String(10), nullable=False, default="CAD")
+    is_sold: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    listed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    scraped_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    image_urls: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True)
+
+    price: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 2), nullable=True)
+    price_per_unit: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 2), nullable=True)
+    price_is_anomaly: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+
+    location_city: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    location_state: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
+
+    quantity: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    ticket_type: Mapped[str] = mapped_column(String(32), nullable=False, default="UNKNOWN")
+    event_days: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True)
+
+    listing_type: Mapped[str] = mapped_column(String(32), nullable=False, default="resale")
+    is_relevant: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
@@ -76,90 +113,8 @@ class Veld2026Raw(Base):
 
     __table_args__ = (
         ForeignKeyConstraint(
-            ["pipeline_run_id"],
-            ["pipeline_runs.id"],
-            name="fk_veld_2026_raw_run_id",
-        ),
-        UniqueConstraint("listing_url", name="uq_veld_2026_raw_listing_url"),
-        Index("idx_veld_2026_raw_fb_listing_id", "fb_listing_id"),
-        Index("idx_veld_2026_raw_seller", "seller_profile_id"),
-        Index("idx_veld_2026_raw_listed_at", "listed_at"),
-        Index("idx_veld_2026_raw_run", "pipeline_run_id"),
-    )
-
-
-class Veld2026Transformed(Base):
-    __tablename__ = "veld_2026_transformed"
-
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-    raw_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
-    pipeline_run_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
-
-    # --- Identity (carried from raw unchanged) ---
-    fb_listing_id: Mapped[str] = mapped_column(Text, nullable=False)
-    listing_url: Mapped[str] = mapped_column(Text, nullable=False)
-    seller_profile_id: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    title: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    currency: Mapped[str] = mapped_column(String(10), nullable=False, default="CAD")
-    is_sold: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    listed_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-    scraped_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-    search_keyword: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    image_urls: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True)
-    condition: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
-
-    # --- Price (computed) ---
-    initial_price: Mapped[Optional[Decimal]] = mapped_column(
-        Numeric(12, 2), nullable=True
-    )
-    price: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 2), nullable=True)
-    price_per_unit: Mapped[Optional[Decimal]] = mapped_column(
-        Numeric(12, 2), nullable=True
-    )
-    price_drop: Mapped[Optional[Decimal]] = mapped_column(
-        Numeric(12, 2), nullable=True
-    )
-    price_drop_pct: Mapped[Optional[Decimal]] = mapped_column(
-        Numeric(6, 2), nullable=True
-    )
-    price_is_anomaly: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=False
-    )
-
-    # --- Location (parsed) ---
-    location_raw: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    location_city: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    location_province: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
-    location_region: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
-
-    # --- Ticket intelligence (extracted from title) ---
-    quantity: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
-    ticket_type: Mapped[str] = mapped_column(
-        String(32), nullable=False, default="UNKNOWN"
-    )
-    event_days: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True)
-    ticket_type_raw: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-
-    # --- Classification flags ---
-    listing_type: Mapped[str] = mapped_column(
-        String(32), nullable=False, default="resale"
-    )
-    is_relevant: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
-
-    # --- Metadata ---
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=func.now()
-    )
-
-    __table_args__ = (
-        ForeignKeyConstraint(
             ["raw_id"],
-            ["veld_2026_raw.id"],
+            ["veld_2026_raw_extract.id"],
             name="fk_veld_2026_transformed_raw_id",
         ),
         ForeignKeyConstraint(
@@ -173,6 +128,5 @@ class Veld2026Transformed(Base):
         Index("idx_veld_2026_transformed_listed_at", "listed_at"),
         Index("idx_veld_2026_transformed_listing_id", "fb_listing_id"),
         Index("idx_veld_2026_transformed_seller", "seller_profile_id"),
-        Index("idx_veld_2026_transformed_listed_at", "listed_at"),
         Index("idx_veld_2026_transformed_pipeline_run", "pipeline_run_id"),
     )

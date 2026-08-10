@@ -24,8 +24,10 @@ class PipelineRun(Base):
     finished_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True)
     total_records: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
-    success_count: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
     error_count: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
+    newly_added_count: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
+    change_added_count: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
+    skipped_count: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now())
 

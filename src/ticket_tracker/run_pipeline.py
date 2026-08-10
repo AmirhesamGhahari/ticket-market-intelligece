@@ -45,7 +45,9 @@ def _print_result(title: str, result, elapsed: float) -> None:
     table.add_row("Run ID", str(result.run_id))
     table.add_row("Status", result.status)
     table.add_row("Total records", str(result.total))
-    table.add_row("[green]✓ Success[/green]", f"[green]{result.success}[/green]")
+    table.add_row("[green]✓ Newly added[/green]", f"[green]{result.newly_added}[/green]")
+    table.add_row("[cyan]~ Changed version[/cyan]", f"[cyan]{result.change_added}[/cyan]")
+    table.add_row("[dim]– Skipped[/dim]", f"[dim]{result.skipped}[/dim]")
     table.add_row("[red]✗ Errors[/red]", f"[red]{result.errors}[/red]")
 
     console.print(table)

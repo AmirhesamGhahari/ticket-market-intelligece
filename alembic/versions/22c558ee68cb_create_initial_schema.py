@@ -34,6 +34,8 @@ def upgrade() -> None:
     )
     op.create_index('idx_pipeline_runs_created_at', 'pipeline_runs', ['created_at'], unique=False)
     op.create_index('idx_pipeline_runs_lstarted_at', 'pipeline_runs', ['started_at'], unique=False)
+    
+    
     op.create_table('veld_2026_raw_extract',
     sa.Column('id', sa.BigInteger(), autoincrement=True, nullable=False),
     sa.Column('pipeline_run_id', sa.UUID(), nullable=False),
@@ -59,6 +61,8 @@ def upgrade() -> None:
     op.create_index('idx_veld_2026_raw_fb_listing_id', 'veld_2026_raw_extract', ['fb_listing_id'], unique=False)
     op.create_index('idx_veld_2026_raw_listed_at', 'veld_2026_raw_extract', ['listed_at'], unique=False)
     op.create_index('idx_veld_2026_raw_run', 'veld_2026_raw_extract', ['pipeline_run_id'], unique=False)
+    
+
     op.create_table('veld_2026_transformed',
     sa.Column('id', sa.BigInteger(), autoincrement=True, nullable=False),
     sa.Column('raw_id', sa.BigInteger(), nullable=False),

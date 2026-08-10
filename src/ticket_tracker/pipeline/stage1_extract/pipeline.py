@@ -36,8 +36,10 @@ class PipelineResult:
     run_id: uuid.UUID
     status: str
     total: int = 0
-    success: int = 0
     errors: int = 0
+    newly_added: int = 0
+    change_added: int = 0
+    skipped: int = 0
 
 
 # ── Field parsing ─────────────────────────────────────────────────────────────
@@ -155,8 +157,10 @@ def _finish_run(session: Session, run: PipelineRun, result: PipelineResult) -> N
     run.status = result.status
     run.finished_at = datetime.now(timezone.utc)
     run.total_records = result.total
-    run.success_count = result.success
     run.error_count = result.errors
+    run.newly_added_count = result.newly_added
+    run.change_added_count = result.change_added
+    run.skipped_count = result.skipped
     session.commit()
 
 
@@ -219,17 +223,17 @@ def run(file_path: Path) -> PipelineResult:
             if existing is None:
                 # New listing — insert
                 session.execute(_INSERT_SQL, params)
-                result.success += 1
+                result.newly_added += 1
 
             elif _has_changed(existing, params):
                 # Listing changed — close old version, insert new
                 session.execute(_CLOSE_CURRENT_SQL, {"listing_url": url})
                 session.execute(_INSERT_SQL, params)
-                result.success += 1
+                result.change_added += 1
 
             else:
                 # No change — already current
-                result.success += 1
+                result.skipped += 1
 
         session.commit()
 
@@ -238,6 +242,7 @@ def run(file_path: Path) -> PipelineResult:
 
     logger.info(
         f"[Stage 1] Done — total={result.total} "
-        f"success={result.success} errors={result.errors}"
+        f"newly_added={result.newly_added} change_added={result.change_added} "
+        f"skipped={result.skipped} errors={result.errors}"
     )
     return result

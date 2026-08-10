@@ -39,8 +39,10 @@ class PipelineResult:
     run_id: uuid.UUID
     status: str
     total: int = 0
-    success: int = 0
     errors: int = 0
+    newly_added: int = 0
+    change_added: int = 0
+    skipped: int = 0
 
 
 # ── SQL ───────────────────────────────────────────────────────────────────────
@@ -177,8 +179,10 @@ def _finish_run(session: Session, run: PipelineRun, result: PipelineResult) -> N
     run.status = result.status
     run.finished_at = datetime.now(timezone.utc)
     run.total_records = result.total
-    run.success_count = result.success
     run.error_count = result.errors
+    run.newly_added_count = result.newly_added
+    run.change_added_count = result.change_added
+    run.skipped_count = result.skipped
     session.commit()
 
 
@@ -215,14 +219,14 @@ def run() -> PipelineResult:
         db_result = session.execute(_TRANSFORM_SQL, {"run_id": str(db_run.id)})
         session.commit()
 
-        result.success = db_result.rowcount
-        result.errors = pending - result.success
+        result.newly_added = db_result.rowcount
+        result.skipped = pending - result.newly_added
 
         # Step 4 — finalize run record
         _finish_run(session, db_run, result)
 
     logger.info(
         f"[Stage 2] Done — total={result.total} "
-        f"success={result.success} errors={result.errors}"
+        f"newly_added={result.newly_added} skipped={result.skipped} errors={result.errors}"
     )
     return result

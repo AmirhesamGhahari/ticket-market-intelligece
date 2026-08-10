@@ -95,3 +95,4 @@ Never write migration SQL by hand after initial setup. Edit the ORM model — it
 
   CREATE DATABASE ticket_tracker;
   \q
+  

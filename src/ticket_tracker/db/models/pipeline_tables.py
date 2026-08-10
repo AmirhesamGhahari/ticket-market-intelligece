@@ -18,14 +18,14 @@ class PipelineRun(Base):
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     stage: Mapped[str] = mapped_column(String(64), nullable=False)
     source: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    status: Mapped[str] = mapped_column(String(32), nullable=True)
+    status: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
     started_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now())
     finished_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True)
-    total_records: Mapped[int] = mapped_column(BigInteger, nullable=True)
-    success_count: Mapped[int] = mapped_column(BigInteger, nullable=True)
-    error_count: Mapped[int] = mapped_column(BigInteger, nullable=True)
+    total_records: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
+    success_count: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
+    error_count: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now())
 

@@ -1,6 +1,7 @@
 # Environment
 .env
 .env.example
+.env.example
 .env/
 
 # Python

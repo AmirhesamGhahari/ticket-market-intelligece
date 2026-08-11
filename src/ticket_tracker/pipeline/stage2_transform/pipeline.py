@@ -54,7 +54,7 @@ _COUNT_PENDING_SQL = text("""
     WHERE id NOT IN (SELECT raw_id FROM veld_2026_transformed)
 """)
 
-_TRANSFORM_SQL = text("""
+_TRANSFORM_SQL = text(r"""
     WITH source AS (
         SELECT
             r.id,

@@ -28,3 +28,6 @@ Thumbs.db
 
 # Data
 sample_data/
+
+#Claude
+.claude/

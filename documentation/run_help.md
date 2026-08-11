@@ -8,6 +8,9 @@
   source .venv/bin/activate
 
   python3 -m pip install --upgrade pip
+  python -m pip install .
+
+  
   python3 -m pip install -e .
 
   This installs the dependencies from pyproject.toml and installs your package in editable mode.

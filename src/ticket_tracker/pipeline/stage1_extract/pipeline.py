@@ -110,7 +110,8 @@ _INSERT_SQL = text("""
     ) VALUES (
         :pipeline_run_id, :fb_listing_id, :listing_url, :seller_profile_id,
         :title, :description, :price, :location_city, :location_state,
-        :image_urls::jsonb, :is_sold, :listed_at, :scraped_at, :raw_payload::jsonb,
+        CAST(:image_urls AS JSONB), :is_sold, :listed_at, :scraped_at,
+        CAST(:raw_payload AS JSONB),
         now(), NULL
     )
 """)

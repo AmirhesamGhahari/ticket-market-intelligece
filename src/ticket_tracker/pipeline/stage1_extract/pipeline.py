@@ -223,12 +223,14 @@ def run(file_path: Path) -> PipelineResult:
             if existing is None:
                 # New listing — insert
                 session.execute(_INSERT_SQL, params)
+                current_state[url] = params
                 result.newly_added += 1
 
             elif _has_changed(existing, params):
                 # Listing changed — close old version, insert new
                 session.execute(_CLOSE_CURRENT_SQL, {"listing_url": url})
                 session.execute(_INSERT_SQL, params)
+                current_state[url] = params
                 result.change_added += 1
 
             else:

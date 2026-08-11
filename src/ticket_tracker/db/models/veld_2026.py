@@ -48,10 +48,11 @@ class Veld2026Raw(Base):
         Index("idx_veld_2026_raw_fb_listing_id", "fb_listing_id"),
         Index("idx_veld_2026_raw_listed_at", "listed_at"),
         Index("idx_veld_2026_raw_run", "pipeline_run_id"),
-        # Partial index — fast lookup of the current version of each URL
+        # Unique partial index — enforces one current version per URL
         Index(
             "idx_veld_2026_raw_current_url",
             "listing_url",
+            unique=True,
             postgresql_where=text("valid_to IS NULL"),
         ),
     )

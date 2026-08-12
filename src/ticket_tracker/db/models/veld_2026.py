@@ -25,6 +25,7 @@ class Veld2026Raw(Base):
     title: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     price: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 2), nullable=True)
+    currency: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
     location_city: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     location_state: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     image_urls: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True)
@@ -48,10 +49,10 @@ class Veld2026Raw(Base):
         Index("idx_veld_2026_raw_fb_listing_id", "fb_listing_id"),
         Index("idx_veld_2026_raw_listed_at", "listed_at"),
         Index("idx_veld_2026_raw_run", "pipeline_run_id"),
-        # Unique partial index — enforces one current version per URL
+        # Unique partial index — enforces one current version per listing ID
         Index(
-            "idx_veld_2026_raw_current_url",
-            "listing_url",
+            "idx_veld_2026_raw_current_listing",
+            "fb_listing_id",
             unique=True,
             postgresql_where=text("valid_to IS NULL"),
         ),

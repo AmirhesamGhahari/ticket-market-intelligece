@@ -17,6 +17,8 @@ dependencies = [
     "rich>=13.0",
     "click>=8.1",
     "python-dotenv>=1.0",
+    "apify-client>=1.7",
+    "pyyaml>=6.0",
 ]
 
 [project.scripts]

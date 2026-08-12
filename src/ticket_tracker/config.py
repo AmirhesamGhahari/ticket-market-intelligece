@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     )
 
     database_url: PostgresDsn
+    apify_api_token: str = ""
 
 
 settings = Settings()

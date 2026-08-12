@@ -1,0 +1,92 @@
+event_name: veld_2026
+apify_actor_id: "raidr-api/facebook-marketplace-scraper"
+radius_km: "100"
+
+# Location is supplied at runtime via --location flag so the same config
+# can be reused for Toronto, Montreal, etc.
+
+proxy:
+  use_apify_proxy: true
+  apify_proxy_groups: ["RESIDENTIAL"]
+  apify_proxy_country: "CA"
+
+# ── Initial run ────────────────────────────────────────────────────────────────
+# Run once to capture the full available history (~30-day FB window).
+# No date filter, no Apify-level dedup — get everything.
+
+initial_run:
+  use_deduplication: false
+  fetch_detailed_items: false
+  searches:
+    - search_term: "veld"
+      listings_per_search: 200
+
+    - search_term: "veld festival"
+      listings_per_search: 200
+
+    - search_term: "veld ticket"
+      listings_per_search: 200
+
+    - search_term: "veld tickets"
+      listings_per_search: 200
+
+    - search_term: "veld vip"
+      min_price: 100
+      listings_per_search: 100
+
+    - search_term: "veld ga"
+      listings_per_search: 100
+
+    - search_term: "veld general admission"
+      listings_per_search: 100
+
+    - search_term: "veld 2026"
+      listings_per_search: 200
+
+    - search_term: "veld music festival"
+      listings_per_search: 100
+
+# ── Periodic run ───────────────────────────────────────────────────────────────
+# Runs every 6 hours. Apify-level dedup skips listings already seen in prior
+# runs; days_listed="1" keeps each search cheap and fast.
+
+periodic_run:
+  use_deduplication: true
+  fetch_detailed_items: false
+  searches:
+    - search_term: "veld"
+      days_listed: "1"
+      listings_per_search: 100
+
+    - search_term: "veld festival"
+      days_listed: "1"
+      listings_per_search: 100
+
+    - search_term: "veld ticket"
+      days_listed: "1"
+      listings_per_search: 100
+
+    - search_term: "veld tickets"
+      days_listed: "1"
+      listings_per_search: 100
+
+    - search_term: "veld vip"
+      days_listed: "1"
+      min_price: 100
+      listings_per_search: 50
+
+    - search_term: "veld ga"
+      days_listed: "1"
+      listings_per_search: 50
+
+    - search_term: "veld general admission"
+      days_listed: "1"
+      listings_per_search: 50
+
+    - search_term: "veld 2026"
+      days_listed: "1"
+      listings_per_search: 100
+
+    - search_term: "veld music festival"
+      days_listed: "1"
+      listings_per_search: 50

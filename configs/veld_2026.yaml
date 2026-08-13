@@ -1,6 +1,6 @@
 event_name: veld_2026
 apify_actor_id: "raidr-api/facebook-marketplace-scraper"
-radius_km: "100"
+radius_km: "250"
 
 # Location is supplied at runtime via --location flag so the same config
 # can be reused for Toronto, Montreal, etc.
@@ -19,32 +19,42 @@ initial_run:
   fetch_detailed_items: false
   searches:
     - search_term: "veld"
-      listings_per_search: 200
+      listings_per_search: 20
+      filter_keywords: "veld"
 
     - search_term: "veld festival"
-      listings_per_search: 200
+      listings_per_search: 20
+      filter_keywords: "veld"
 
     - search_term: "veld ticket"
-      listings_per_search: 200
+      listings_per_search: 20
+      filter_keywords: "veld"
 
     - search_term: "veld tickets"
-      listings_per_search: 200
+      listings_per_search: 20
+      filter_keywords: "veld"
 
     - search_term: "veld vip"
-      min_price: 100
-      listings_per_search: 100
+      #min_price: 1
+      #max_price: 1200
+      listings_per_search: 20
+      filter_keywords: "veld"
 
     - search_term: "veld ga"
-      listings_per_search: 100
+      listings_per_search: 20
+      filter_keywords: "veld"
 
     - search_term: "veld general admission"
-      listings_per_search: 100
+      listings_per_search: 20
+      filter_keywords: "veld"
 
     - search_term: "veld 2026"
-      listings_per_search: 200
+      listings_per_search: 20
+      filter_keywords: "veld"
 
     - search_term: "veld music festival"
-      listings_per_search: 100
+      listings_per_search: 20
+      filter_keywords: "veld"
 
 # ── Periodic run ───────────────────────────────────────────────────────────────
 # Runs every 6 hours. Apify-level dedup skips listings already seen in prior
@@ -52,41 +62,51 @@ initial_run:
 
 periodic_run:
   use_deduplication: true
+  max_listing_age: 5
   fetch_detailed_items: false
   searches:
     - search_term: "veld"
       days_listed: "1"
-      listings_per_search: 100
+      listings_per_search: 10
+      filter_keywords: "veld"
 
     - search_term: "veld festival"
       days_listed: "1"
-      listings_per_search: 100
+      listings_per_search: 10
+      filter_keywords: "veld"
 
     - search_term: "veld ticket"
       days_listed: "1"
-      listings_per_search: 100
+      listings_per_search: 10
+      filter_keywords: "veld"
 
     - search_term: "veld tickets"
       days_listed: "1"
-      listings_per_search: 100
+      listings_per_search: 10
+      filter_keywords: "veld"
 
     - search_term: "veld vip"
       days_listed: "1"
-      min_price: 100
-      listings_per_search: 50
+      min_price: 10
+      listings_per_search: 10
+      filter_keywords: "veld"
 
     - search_term: "veld ga"
       days_listed: "1"
-      listings_per_search: 50
+      listings_per_search: 10
+      filter_keywords: "veld"
 
     - search_term: "veld general admission"
       days_listed: "1"
-      listings_per_search: 50
+      listings_per_search: 10
+      filter_keywords: "veld"
 
     - search_term: "veld 2026"
       days_listed: "1"
-      listings_per_search: 100
+      listings_per_search: 10
+      filter_keywords: "veld"
 
     - search_term: "veld music festival"
       days_listed: "1"
-      listings_per_search: 50
+      listings_per_search: 10
+      filter_keywords: "veld"

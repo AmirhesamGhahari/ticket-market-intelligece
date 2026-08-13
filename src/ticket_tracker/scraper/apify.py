@@ -19,11 +19,14 @@ class ApifyRunner:
             logger.error(f"[Apify] Actor call failed: {exc}")
             raise
 
-        dataset_id = run["defaultDatasetId"]
         try:
-            items = list(self._client.dataset(dataset_id).iterate_items())
+            items = list(
+                self._client.dataset(run.default_dataset_id).iterate_items()
+            )
         except Exception as exc:
-            logger.error(f"[Apify] Failed to fetch dataset {dataset_id}: {exc}")
+            logger.error(
+                f"[Apify] Failed to fetch dataset {run.default_dataset_id}: {exc}"
+            )
             raise
 
         logger.info(f"[Apify] Done — {len(items)} records retrieved")

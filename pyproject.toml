@@ -26,4 +26,3 @@ run-pipeline = "ticket_tracker.run_pipeline:cli"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/ticket_tracker"]
-

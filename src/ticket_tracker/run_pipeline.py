@@ -71,7 +71,7 @@ def _build_run_input(config: dict, mode: str, location: str) -> dict:
             entry["filterKeywords"] = s["filter_keywords"]
         searches.append(entry)
 
-    return {
+    run_input: dict = {
         "searchMode": "advanced",
         "location": location,
         "radiusKm": str(config["radius_km"]),
@@ -84,6 +84,9 @@ def _build_run_input(config: dict, mode: str, location: str) -> dict:
             "apifyProxyCountry": config["proxy"]["apify_proxy_country"],
         },
     }
+    if run_config.get("max_listing_age") is not None:
+        run_input["maxListingAge"] = run_config["max_listing_age"]
+    return run_input
 
 
 # ── Formatting helpers ────────────────────────────────────────────────────────

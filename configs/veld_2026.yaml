@@ -2,111 +2,116 @@ event_name: veld_2026
 apify_actor_id: "raidr-api/facebook-marketplace-scraper"
 radius_km: "250"
 
-# Location is supplied at runtime via --location flag so the same config
-# can be reused for Toronto, Montreal, etc.
-
 proxy:
   use_apify_proxy: true
   apify_proxy_groups: ["RESIDENTIAL"]
   apify_proxy_country: "CA"
 
+# ── Search terms ───────────────────────────────────────────────────────────────
+# Shared across all cities and both run modes.
+# Apify advanced mode caps at 50 searches per actor run — trim if you exceed that.
+
+search_terms:
+  - "veld"
+  - "veld ticket"
+  - "veld pass"
+  - "veld 3 day"
+  - "veld wristband"
+  - "veld bracelet"
+  - "veld single day"
+  - "veld friday"
+  - "veld saturday"
+  - "veld sunday"
+  - "veld vip"
+  - "veld ga"
+
+
+search_terms_v002:
+  - "veld"
+  - "veld 2026"
+  - "veld ticket"
+  - "veld pass"
+  - "veld weekend pass"
+  - "veld 3 day"
+  - "veld wristband"
+  - "veld bracelet"
+  - "veld single day"
+  - "veld day pass"
+  - "veld friday"
+  - "veld saturday"
+  - "veld sunday"
+  - "veld day 1"
+  - "veld day 2"
+  - "veld day 3"
+  - "veld vip"
+  - "veld ga"
+
+search_terms_001:
+  - "veld"
+  - "veld 2026"
+  - "veld festival"
+  - "veld festival 2026"
+  - "veld music festival"
+  - "veld music festival 2026"
+  - "veld ticket"
+  - "veld tickets"
+  - "veld ticket 2026"
+  - "veld pass"
+  - "veld passes"
+  - "veld ticket pass"
+  - "veld weekend pass"
+  - "veld full weekend"
+  - "veld 3 day"
+  - "veld 3-day"
+  - "veld 3 day pass"
+  - "veld 3-day pass"
+  - "veld wristband"
+  - "veld bracelet"
+  - "veld single day"
+  - "veld single-day"
+  - "veld day pass"
+  - "veld friday"
+  - "veld friday pass"
+  - "veld saturday"
+  - "veld saturday pass"
+  - "veld sunday"
+  - "veld sunday pass"
+  - "veld day 1"
+  - "veld day 2"
+  - "veld day 3"
+  - "veld vip"
+  - "veld vip pass"
+  - "veld vip wristband"
+  - "veld ga"
+  - "veld ga pass"
+  - "veld general admission"
+  - "veld for sale"
+  - "veld tickets for sale"
+  - "selling veld tickets"
+  - "selling veld pass"
+  - "veld afterparty"
+
 # ── Initial run ────────────────────────────────────────────────────────────────
 # Run once to capture the full available history (~30-day FB window).
 # No date filter, no Apify-level dedup — get everything.
+# One actor run is made per city.
 
 initial_run:
+  cities:
+    - "Toronto, Ontario"
   use_deduplication: false
   fetch_detailed_items: false
-  searches:
-    - search_term: "veld"
-      listings_per_search: 20
-      filter_keywords: "veld"
-
-    - search_term: "veld festival"
-      listings_per_search: 20
-      filter_keywords: "veld"
-
-    - search_term: "veld ticket"
-      listings_per_search: 20
-      filter_keywords: "veld"
-
-    - search_term: "veld tickets"
-      listings_per_search: 20
-      filter_keywords: "veld"
-
-    - search_term: "veld vip"
-      #min_price: 1
-      #max_price: 1200
-      listings_per_search: 20
-      filter_keywords: "veld"
-
-    - search_term: "veld ga"
-      listings_per_search: 20
-      filter_keywords: "veld"
-
-    - search_term: "veld general admission"
-      listings_per_search: 20
-      filter_keywords: "veld"
-
-    - search_term: "veld 2026"
-      listings_per_search: 20
-      filter_keywords: "veld"
-
-    - search_term: "veld music festival"
-      listings_per_search: 20
-      filter_keywords: "veld"
+  listings_per_search: 500
+  filter_keywords: "veld"
 
 # ── Periodic run ───────────────────────────────────────────────────────────────
-# Runs every 6 hours. Apify-level dedup skips listings already seen in prior
-# runs; days_listed="1" keeps each search cheap and fast.
+# Run every 6 hours. Apify dedup skips listings seen in prior runs.
+# days_listed="1" keeps each search fast and cheap.
 
 periodic_run:
+  cities:
+    - "Toronto, Ontario"
   use_deduplication: true
-  max_listing_age: 5
   fetch_detailed_items: false
-  searches:
-    - search_term: "veld"
-      days_listed: "1"
-      listings_per_search: 10
-      filter_keywords: "veld"
-
-    - search_term: "veld festival"
-      days_listed: "1"
-      listings_per_search: 10
-      filter_keywords: "veld"
-
-    - search_term: "veld ticket"
-      days_listed: "1"
-      listings_per_search: 10
-      filter_keywords: "veld"
-
-    - search_term: "veld tickets"
-      days_listed: "1"
-      listings_per_search: 10
-      filter_keywords: "veld"
-
-    - search_term: "veld vip"
-      days_listed: "1"
-      min_price: 10
-      listings_per_search: 10
-      filter_keywords: "veld"
-
-    - search_term: "veld ga"
-      days_listed: "1"
-      listings_per_search: 10
-      filter_keywords: "veld"
-
-    - search_term: "veld general admission"
-      days_listed: "1"
-      listings_per_search: 10
-      filter_keywords: "veld"
-
-    - search_term: "veld 2026"
-      days_listed: "1"
-      listings_per_search: 10
-      filter_keywords: "veld"
-
-    - search_term: "veld music festival"
-      days_listed: "1"
-      listings_per_search: 10
-      filter_keywords: "veld"
+  listings_per_search: 24
+  days_listed: "1"

@@ -1,9 +1,9 @@
 """CLI entry point for the data pipeline.
 
 Commands:
-    # Fetch live from Apify and run both stages
-    run-pipeline from-apify --config veld_2026 --mode initial --location "Toronto, Ontario"
-    run-pipeline from-apify --config veld_2026 --mode periodic --location "Montreal, QC"
+    # Fetch live from Apify and run both stages (cities come from the config file)
+    run-pipeline from-apify --config veld_2026 --mode initial
+    run-pipeline from-apify --config veld_2026 --mode periodic
 
     # Load from a saved Apify JSON file (dev / backfill)
     run-pipeline from-file --file sample_data/actual_data_raider_craper.json
@@ -37,7 +37,7 @@ console = Console()
 logger.remove()
 logger.add(sys.stderr, format="<level>{level: <8}</level> | {message}", level="INFO")
 
-_CONFIGS_DIR = Path(__file__).parents[2] / "configs"
+_CONFIGS_DIR = Path.cwd() / "configs"
 
 
 # ── Config helpers ────────────────────────────────────────────────────────────
@@ -53,40 +53,44 @@ def _load_config(config_name: str) -> dict:
         return yaml.safe_load(fh)
 
 
-def _build_run_input(config: dict, mode: str, location: str) -> dict:
+def _build_run_inputs(config: dict, mode: str) -> list[dict]:
+    """Return one Apify run_input dict per city defined in the config for this mode."""
     run_config = config[f"{mode}_run"]
 
+    # Build the searches list from the shared top-level search_terms.
     searches = []
-    for s in run_config["searches"]:
-        entry: dict = {"searchTerm": s["search_term"]}
-        if s.get("min_price") is not None:
-            entry["minPrice"] = s["min_price"]
-        if s.get("max_price") is not None:
-            entry["maxPrice"] = s["max_price"]
-        if s.get("days_listed"):
-            entry["daysListed"] = s["days_listed"]
-        if s.get("listings_per_search"):
-            entry["listingsPerSearch"] = s["listings_per_search"]
-        if s.get("filter_keywords"):
-            entry["filterKeywords"] = s["filter_keywords"]
+    for term in config["search_terms"]:
+        entry: dict = {"searchTerm": term}
+        if run_config.get("listings_per_search"):
+            entry["listingsPerSearch"] = run_config["listings_per_search"]
+        if run_config.get("days_listed"):
+            entry["daysListed"] = run_config["days_listed"]
+        if run_config.get("filter_keywords"):
+            entry["filterKeywords"] = run_config["filter_keywords"]
         searches.append(entry)
 
-    run_input: dict = {
-        "searchMode": "advanced",
-        "location": location,
-        "radiusKm": str(config["radius_km"]),
-        "searches": searches,
-        "useDeduplication": run_config["use_deduplication"],
-        "fetchDetailedItems": run_config.get("fetch_detailed_items", False),
-        "proxyConfiguration": {
-            "useApifyProxy": config["proxy"]["use_apify_proxy"],
-            "apifyProxyGroups": config["proxy"]["apify_proxy_groups"],
-            "apifyProxyCountry": config["proxy"]["apify_proxy_country"],
-        },
-    }
-    if run_config.get("max_listing_age") is not None:
-        run_input["maxListingAge"] = run_config["max_listing_age"]
-    return run_input
+    # One actor run per city — same searches, different location.
+    run_inputs = []
+    for city in run_config["cities"]:
+        run_input: dict = {
+            "searchMode": "advanced",
+            "location": city,
+            "radiusKm": str(config["radius_km"]),
+            "searches": searches,
+            "listingsPerSearch": run_config["listings_per_search"],
+            "useDeduplication": run_config["use_deduplication"],
+            "fetchDetailedItems": run_config.get("fetch_detailed_items", False),
+            "proxyConfiguration": {
+                "useApifyProxy": config["proxy"]["use_apify_proxy"],
+                "apifyProxyGroups": config["proxy"]["apify_proxy_groups"],
+                "apifyProxyCountry": config["proxy"]["apify_proxy_country"],
+            },
+        }
+        if run_config.get("max_listing_age") is not None:
+            run_input["maxListingAge"] = run_config["max_listing_age"]
+        run_inputs.append(run_input)
+
+    return run_inputs
 
 
 # ── Formatting helpers ────────────────────────────────────────────────────────
@@ -135,29 +139,31 @@ def cli() -> None:
     help="initial = full history fetch. periodic = recent listings only.",
 )
 @click.option(
-    "--location", "-l", required=True,
-    help="City or location to search (e.g. 'Toronto, Ontario', 'Montreal, QC').",
-)
-@click.option(
     "--stage", "-s",
     type=click.Choice(["stage1", "stage2", "all"], case_sensitive=False),
     default="all", show_default=True,
     help="Which pipeline stage to run.",
 )
-def from_apify(config_name: str, mode: str, location: str, stage: str) -> None:
-    """Fetch listings from Apify and run the pipeline."""
+def from_apify(config_name: str, mode: str, stage: str) -> None:
+    """Fetch listings from Apify for every city in the config and run the pipeline."""
     stage = stage.lower()
     console.print()
     total_start = time.monotonic()
 
     if stage in ("stage1", "all"):
         config = _load_config(config_name)
-        run_input = _build_run_input(config, mode, location)
+        run_inputs = _build_run_inputs(config, mode)
         runner = ApifyRunner(settings.apify_api_token, config["apify_actor_id"])
+
+        all_records: list[dict] = []
+        for run_input in run_inputs:
+            city = run_input["location"]
+            logger.info(f"[Apify] Fetching city: {city!r}")
+            all_records.extend(runner.run(run_input))
+
+        source_label = f"{config_name}:{mode}"
         t0 = time.monotonic()
-        records = runner.run(run_input)
-        source_label = f"{config_name}:{mode}:{location}"
-        result1 = run_stage1_from_records(records, source=source_label)
+        result1 = run_stage1_from_records(all_records, source=source_label)
         _print_result("STAGE 1 — Fetch & Extract", result1, time.monotonic() - t0)
 
     if stage in ("stage2", "all"):

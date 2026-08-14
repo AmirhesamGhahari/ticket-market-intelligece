@@ -6,18 +6,18 @@ Commands:
     run-pipeline from-apify --config veld_2026 --mode periodic
 
     # Load from a saved Apify JSON file (dev / backfill)
-    run-pipeline from-file --file sample_data/actual_data_raider_craper.json
+    run-pipeline from-file --config veld_2026 --file sample_data/actual_data_raider_craper.json
 
     # Re-run Stage 2 transform only (no new data needed)
-    run-pipeline transform
+    run-pipeline transform --config veld_2026
 """
 
 from __future__ import annotations
 
 import sys
 import time
+import uuid
 from pathlib import Path
-from typing import Optional
 
 import click
 import yaml
@@ -25,8 +25,10 @@ from loguru import logger
 from rich.console import Console
 from rich.rule import Rule
 from rich.table import Table
+from sqlalchemy import text
 
 from ticket_tracker.config import settings
+from ticket_tracker.db.engine import SessionLocal
 from ticket_tracker.pipeline.stage1_extract.pipeline import run as run_stage1
 from ticket_tracker.pipeline.stage1_extract.pipeline import run_from_records as run_stage1_from_records
 from ticket_tracker.pipeline.stage2_transform.pipeline import run as run_stage2
@@ -53,11 +55,33 @@ def _load_config(config_name: str) -> dict:
         return yaml.safe_load(fh)
 
 
+def _resolve_event(config: dict) -> uuid.UUID:
+    """Upsert the event into the events table and return its UUID."""
+    with SessionLocal() as session:
+        session.execute(
+            text("""
+                INSERT INTO events (id, event_key, event_name)
+                VALUES (:id, :event_key, :event_name)
+                ON CONFLICT (event_key) DO NOTHING
+            """),
+            {
+                "id": str(uuid.uuid4()),
+                "event_key": config["event_key"],
+                "event_name": config["event_name"],
+            },
+        )
+        session.commit()
+        event_id = session.execute(
+            text("SELECT id FROM events WHERE event_key = :key"),
+            {"key": config["event_key"]},
+        ).scalar()
+    return event_id
+
+
 def _build_run_inputs(config: dict, mode: str) -> list[dict]:
     """Return one Apify run_input dict per city defined in the config for this mode."""
     run_config = config[f"{mode}_run"]
 
-    # Build the searches list from the shared top-level search_terms.
     searches = []
     for term in config["search_terms"]:
         entry: dict = {"searchTerm": term}
@@ -69,7 +93,6 @@ def _build_run_inputs(config: dict, mode: str) -> list[dict]:
             entry["filterKeywords"] = run_config["filter_keywords"]
         searches.append(entry)
 
-    # One actor run per city — same searches, different location.
     run_inputs = []
     for city in run_config["cities"]:
         run_input: dict = {
@@ -150,8 +173,11 @@ def from_apify(config_name: str, mode: str, stage: str) -> None:
     console.print()
     total_start = time.monotonic()
 
+    config = _load_config(config_name)
+    event_id = _resolve_event(config)
+    event_keyword = config["event_keyword"]
+
     if stage in ("stage1", "all"):
-        config = _load_config(config_name)
         run_inputs = _build_run_inputs(config, mode)
         runner = ApifyRunner(settings.apify_api_token, config["apify_actor_id"])
 
@@ -163,12 +189,12 @@ def from_apify(config_name: str, mode: str, stage: str) -> None:
 
         source_label = f"{config_name}:{mode}"
         t0 = time.monotonic()
-        result1 = run_stage1_from_records(all_records, source=source_label)
+        result1 = run_stage1_from_records(all_records, source=source_label, event_id=event_id)
         _print_result("STAGE 1 — Fetch & Extract", result1, time.monotonic() - t0)
 
     if stage in ("stage2", "all"):
         t0 = time.monotonic()
-        result2 = run_stage2()
+        result2 = run_stage2(event_id=event_id, event_keyword=event_keyword)
         _print_result("STAGE 2 — Transform", result2, time.monotonic() - t0)
 
     console.print(Rule(f"[dim]Done in {time.monotonic() - total_start:.1f}s[/dim]"))
@@ -179,6 +205,10 @@ def from_apify(config_name: str, mode: str, stage: str) -> None:
 
 
 @cli.command("from-file")
+@click.option(
+    "--config", "-c", "config_name", required=True,
+    help="Event config name (e.g. veld_2026). Looks in configs/ directory.",
+)
 @click.option(
     "--file", "-f", "source_file",
     required=True,
@@ -191,20 +221,24 @@ def from_apify(config_name: str, mode: str, stage: str) -> None:
     default="all", show_default=True,
     help="Which pipeline stage to run.",
 )
-def from_file(source_file: Path, stage: str) -> None:
+def from_file(config_name: str, source_file: Path, stage: str) -> None:
     """Load listings from a saved Apify JSON file and run the pipeline."""
     stage = stage.lower()
     console.print()
     total_start = time.monotonic()
 
+    config = _load_config(config_name)
+    event_id = _resolve_event(config)
+    event_keyword = config["event_keyword"]
+
     if stage in ("stage1", "all"):
         t0 = time.monotonic()
-        result1 = run_stage1(source_file)
+        result1 = run_stage1(source_file, event_id=event_id)
         _print_result("STAGE 1 — Extract & Load", result1, time.monotonic() - t0)
 
     if stage in ("stage2", "all"):
         t0 = time.monotonic()
-        result2 = run_stage2()
+        result2 = run_stage2(event_id=event_id, event_keyword=event_keyword)
         _print_result("STAGE 2 — Transform", result2, time.monotonic() - t0)
 
     console.print(Rule(f"[dim]Done in {time.monotonic() - total_start:.1f}s[/dim]"))
@@ -215,11 +249,20 @@ def from_file(source_file: Path, stage: str) -> None:
 
 
 @cli.command("transform")
-def transform() -> None:
-    """Run Stage 2 transform on any pending raw records (no new data needed)."""
+@click.option(
+    "--config", "-c", "config_name", required=True,
+    help="Event config name (e.g. veld_2026). Looks in configs/ directory.",
+)
+def transform(config_name: str) -> None:
+    """Run Stage 2 transform on pending raw records for this event (no new data needed)."""
     console.print()
     t0 = time.monotonic()
-    result = run_stage2()
+
+    config = _load_config(config_name)
+    event_id = _resolve_event(config)
+    event_keyword = config["event_keyword"]
+
+    result = run_stage2(event_id=event_id, event_keyword=event_keyword)
     _print_result("STAGE 2 — Transform", result, time.monotonic() - t0)
     console.print(Rule(f"[dim]Done in {time.monotonic() - t0:.1f}s[/dim]"))
     console.print()

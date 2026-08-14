@@ -1,4 +1,6 @@
-event_name: veld_2026
+event_key: "veld_2026"
+event_name: "VELD Music Festival 2026"
+event_keyword: "veld"
 apify_actor_id: "raidr-api/facebook-marketplace-scraper"
 radius_km: "250"
 
@@ -113,5 +115,5 @@ periodic_run:
     - "Toronto, Ontario"
   use_deduplication: true
   fetch_detailed_items: false
-  listings_per_search: 24
+  listings_per_search: 100
   days_listed: "1"

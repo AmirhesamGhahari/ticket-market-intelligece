@@ -1,6 +1,6 @@
 """Stage 2 transform pipeline.
 
-Reads from veld_2026_raw_extract and loads into veld_2026_transformed
+Reads from raw_extract for a specific event and loads into transformed
 via a single INSERT SELECT statement — all transformation logic lives in SQL.
 
 Incremental by design: the WHERE clause skips raw records that already have
@@ -12,7 +12,7 @@ Transformations applied in SQL:
   - event_days  : Friday / Saturday / Sunday detected from title as a JSONB array
   - price_per_unit : price / quantity
   - price_is_anomaly : outside the $50–$2000 reasonable range
-  - is_relevant : title contains the word "veld"
+  - is_relevant : title contains the event keyword (e.g. "veld")
   - listing_type : always "resale" for Facebook Marketplace
   - currency     : always "CAD"
 """
@@ -50,14 +50,16 @@ class PipelineResult:
 
 _COUNT_PENDING_SQL = text("""
     SELECT COUNT(*)
-    FROM veld_2026_raw_extract
-    WHERE id NOT IN (SELECT raw_id FROM veld_2026_transformed)
+    FROM raw_extract
+    WHERE event_id = :event_id
+      AND id NOT IN (SELECT raw_id FROM transformed)
 """)
 
 _TRANSFORM_SQL = text(r"""
     WITH source AS (
         SELECT
             r.id,
+            r.event_id,
             r.fb_listing_id,
             r.listing_url,
             r.seller_profile_id,
@@ -75,10 +77,12 @@ _TRANSFORM_SQL = text(r"""
                 (regexp_match(r.title, '(\d+)[[:space:]]*[xX][[:space:]]', 'i'))[1]::int,
                 1
             ) AS quantity
-        FROM veld_2026_raw_extract r
-        WHERE r.id NOT IN (SELECT raw_id FROM veld_2026_transformed)
+        FROM raw_extract r
+        WHERE r.event_id = :event_id
+          AND r.id NOT IN (SELECT raw_id FROM transformed)
     )
-    INSERT INTO veld_2026_transformed (
+    INSERT INTO transformed (
+        event_id,
         raw_id,
         pipeline_run_id,
         fb_listing_id,
@@ -103,6 +107,7 @@ _TRANSFORM_SQL = text(r"""
         is_relevant
     )
     SELECT
+        s.event_id,
         s.id                                                    AS raw_id,
         :run_id                                                 AS pipeline_run_id,
         s.fb_listing_id,
@@ -156,8 +161,8 @@ _TRANSFORM_SQL = text(r"""
 
         'resale'                                                AS listing_type,
 
-        -- is_relevant: title contains the word "veld"
-        (s.title ~* '\mveld\M')                                 AS is_relevant
+        -- is_relevant: title contains the event keyword (passed as bind param)
+        (s.title ~* :event_keyword_pattern)                     AS is_relevant
 
     FROM source s
     ON CONFLICT (raw_id) DO NOTHING
@@ -189,8 +194,8 @@ def _finish_run(session: Session, run: PipelineRun, result: PipelineResult) -> N
 # ── Entry point ───────────────────────────────────────────────────────────────
 
 
-def run() -> PipelineResult:
-    """Run Stage 2: transform all untransformed raw records into veld_2026_transformed.
+def run(event_id: uuid.UUID, event_keyword: str) -> PipelineResult:
+    """Run Stage 2: transform all untransformed raw records for this event.
 
     Steps:
       1. Create pipeline_run record (status="running").
@@ -200,12 +205,17 @@ def run() -> PipelineResult:
     """
     logger.info("[Stage 2] Starting")
 
+    # Build the is_relevant regex pattern from the event keyword (e.g. "veld" → \mveld\M)
+    event_keyword_pattern = f"\\m{event_keyword}\\M"
+
     with SessionLocal() as session:
         db_run = _create_run(session)
         result = PipelineResult(run_id=db_run.id, status="completed")
 
         # Step 2 — check for pending work
-        pending = session.execute(_COUNT_PENDING_SQL).scalar() or 0
+        pending = session.execute(
+            _COUNT_PENDING_SQL, {"event_id": str(event_id)}
+        ).scalar() or 0
         result.total = pending
 
         if pending == 0:
@@ -216,7 +226,14 @@ def run() -> PipelineResult:
         logger.info(f"[Stage 2] {pending} raw records to transform")
 
         # Step 3 — transform everything in one SQL statement
-        db_result = session.execute(_TRANSFORM_SQL, {"run_id": str(db_run.id)})
+        db_result = session.execute(
+            _TRANSFORM_SQL,
+            {
+                "run_id": str(db_run.id),
+                "event_id": str(event_id),
+                "event_keyword_pattern": event_keyword_pattern,
+            },
+        )
         session.commit()
 
         result.newly_added = db_result.rowcount

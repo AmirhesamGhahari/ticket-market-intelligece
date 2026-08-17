@@ -1,0 +1,56 @@
+event_key: "osheaga_2026"
+event_name: "Osheaga Music Festival 2026"
+event_keyword: "osheaga"
+apify_actor_id: "raidr-api/facebook-marketplace-scraper"
+radius_km: "250"
+
+proxy:
+  use_apify_proxy: true
+  apify_proxy_groups: ["RESIDENTIAL"]
+  apify_proxy_country: "CA"
+
+# ── Search terms ───────────────────────────────────────────────────────────────
+# Shared across all cities and both run modes.
+# Apify advanced mode caps at 50 searches per actor run — trim if you exceed that.
+
+search_terms:
+  - "osheaga"
+  - "osheaga ticket"
+  - "osheaga pass"
+  - "veld 3 day"
+  - "osheaga wristband"
+  - "osheaga bracelet"
+  - "osheaga single day"
+  - "osheaga friday"
+  - "osheaga saturday"
+  - "osheaga sunday"
+  - "osheaga vip"
+  - "osheaga ga"
+  - "osheaga 2026"
+
+
+# ── Initial run ────────────────────────────────────────────────────────────────
+# Run once to capture the full available history (~30-day FB window).
+# No date filter, no Apify-level dedup — get everything.
+# One actor run is made per city.
+
+initial_run:
+  cities:
+    - "Montreal, Quebec"
+  use_deduplication: false
+  fetch_detailed_items: false
+  listings_per_search: 500
+  filter_keywords: "osheaga"
+
+# ── Periodic run ───────────────────────────────────────────────────────────────
+# Run every 6 hours. Apify dedup skips listings seen in prior runs.
+# days_listed="1" keeps each search fast and cheap.
+
+periodic_run:
+  cities:
+    - "Toronto, Quebec"
+  use_deduplication: true
+  fetch_detailed_items: false
+  listings_per_search: 100
+  filter_keywords: "osheaga"
+  days_listed: "1"

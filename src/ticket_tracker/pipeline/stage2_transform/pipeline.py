@@ -1,10 +1,10 @@
 """Stage 2 transform pipeline.
 
-Reads from raw_extract for a specific event and loads into transformed
+Reads from facebook_listing_raw for a specific event and loads into facebook_listing_transformed
 via a single INSERT SELECT statement — all transformation logic lives in SQL.
 
 Incremental by design: the WHERE clause skips raw records that already have
-a corresponding row in transformed, so re-runs are always safe.
+a corresponding row in facebook_listing_transformed, so re-runs are always safe.
 
 Transformations applied in SQL:
   - quantity    : extract "Nx" pattern from title (e.g. "2x tickets" → 2)
@@ -50,9 +50,9 @@ class PipelineResult:
 
 _COUNT_PENDING_SQL = text("""
     SELECT COUNT(*)
-    FROM raw_extract
+    FROM facebook_listing_raw
     WHERE event_id = :event_id
-      AND id NOT IN (SELECT raw_id FROM transformed)
+      AND id NOT IN (SELECT raw_id FROM facebook_listing_transformed)
 """)
 
 _TRANSFORM_SQL = text(r"""
@@ -60,6 +60,7 @@ _TRANSFORM_SQL = text(r"""
         SELECT
             r.id,
             r.event_id,
+            r.event_key,
             r.fb_listing_id,
             r.listing_url,
             r.seller_profile_id,
@@ -77,12 +78,13 @@ _TRANSFORM_SQL = text(r"""
                 (regexp_match(r.title, '(\d+)[[:space:]]*[xX][[:space:]]', 'i'))[1]::int,
                 1
             ) AS quantity
-        FROM raw_extract r
+        FROM facebook_listing_raw r
         WHERE r.event_id = :event_id
-          AND r.id NOT IN (SELECT raw_id FROM transformed)
+          AND r.id NOT IN (SELECT raw_id FROM facebook_listing_transformed)
     )
-    INSERT INTO transformed (
+    INSERT INTO facebook_listing_transformed (
         event_id,
+        event_key,
         raw_id,
         pipeline_run_id,
         fb_listing_id,
@@ -108,6 +110,7 @@ _TRANSFORM_SQL = text(r"""
     )
     SELECT
         s.event_id,
+        s.event_key,
         s.id                                                    AS raw_id,
         :run_id                                                 AS pipeline_run_id,
         s.fb_listing_id,
@@ -166,6 +169,7 @@ _TRANSFORM_SQL = text(r"""
 
     FROM source s
     ON CONFLICT (raw_id) DO NOTHING
+
 """)
 
 
@@ -199,7 +203,7 @@ def run(event_id: uuid.UUID, event_keyword: str) -> PipelineResult:
 
     Steps:
       1. Create pipeline_run record (status="running").
-      2. Count raw records not yet in transformed — exit early if none.
+      2. Count raw records not yet in facebook_listing_transformed — exit early if none.
       3. Execute single INSERT SELECT with all transformation logic in SQL.
       4. Finalize pipeline_run with row counts.
     """

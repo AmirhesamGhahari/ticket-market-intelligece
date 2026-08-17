@@ -20,10 +20,11 @@ class FacebookListingRaw(Base):
     Keyed on (event_id, fb_listing_id) for CDC uniqueness.
     """
 
-    __tablename__ = "raw_extract"
+    __tablename__ = "facebook_listing_raw"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     event_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    event_key: Mapped[str] = mapped_column(String(64), nullable=False)
     pipeline_run_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
 
     fb_listing_id: Mapped[str] = mapped_column(Text, nullable=False)
@@ -48,15 +49,15 @@ class FacebookListingRaw(Base):
     valid_to: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
     __table_args__ = (
-        ForeignKeyConstraint(["event_id"], ["events.id"], name="fk_raw_extract_event_id"),
-        ForeignKeyConstraint(["pipeline_run_id"], ["pipeline_runs.id"], name="fk_raw_extract_run_id"),
+        ForeignKeyConstraint(["event_id"], ["events.id"], name="fk_fb_listing_raw_event_id"),
+        ForeignKeyConstraint(["pipeline_run_id"], ["pipeline_runs.id"], name="fk_fb_listing_raw_run_id"),
         # Compound leading indexes — event_id first so all event-scoped queries use a prefix scan
-        Index("idx_raw_extract_event_listing", "event_id", "fb_listing_id"),
-        Index("idx_raw_extract_event_listed_at", "event_id", "listed_at"),
-        Index("idx_raw_extract_run", "pipeline_run_id"),
+        Index("idx_fb_listing_raw_event_listing", "event_id", "fb_listing_id"),
+        Index("idx_fb_listing_raw_event_listed_at", "event_id", "listed_at"),
+        Index("idx_fb_listing_raw_run", "pipeline_run_id"),
         # CDC partial unique index — enforces one current version per (event, listing)
         Index(
-            "idx_raw_extract_current_listing",
+            "idx_fb_listing_raw_current_listing",
             "event_id",
             "fb_listing_id",
             unique=True,

@@ -1,6 +1,6 @@
 """Stage 1 extract pipeline.
 
-Reads Apify raider-api records and loads them into raw_extract
+Reads Apify raider-api records and loads them into facebook_listing_raw
 using CDC (Change Data Capture) keyed on (event_id, fb_listing_id).
 
 CDC rules per listing:
@@ -84,7 +84,7 @@ def _load_current_state(session: Session, event_id: uuid.UUID) -> dict[str, dict
     rows = session.execute(
         text("""
             SELECT fb_listing_id, price, is_sold, title, location_city, location_state
-            FROM raw_extract
+            FROM facebook_listing_raw
             WHERE event_id = :event_id AND valid_to IS NULL
         """),
         {"event_id": str(event_id)},
@@ -103,14 +103,14 @@ def _has_changed(existing: dict, params: dict) -> bool:
 
 
 _INSERT_SQL = text("""
-    INSERT INTO raw_extract (
-        event_id, pipeline_run_id, fb_listing_id, listing_url, seller_profile_id,
+    INSERT INTO facebook_listing_raw (
+        event_id, event_key, pipeline_run_id, fb_listing_id, listing_url, seller_profile_id,
         title, description, price, currency,
         location_city, location_state,
         image_urls, is_sold, listed_at, scraped_at,
         raw_payload, valid_from, valid_to
     ) VALUES (
-        :event_id, :pipeline_run_id, :fb_listing_id, :listing_url, :seller_profile_id,
+        :event_id, :event_key, :pipeline_run_id, :fb_listing_id, :listing_url, :seller_profile_id,
         :title, :description, :price, :currency,
         :location_city, :location_state,
         CAST(:image_urls AS JSONB), :is_sold, :listed_at, :scraped_at,
@@ -119,19 +119,20 @@ _INSERT_SQL = text("""
 """)
 
 _CLOSE_CURRENT_SQL = text("""
-    UPDATE raw_extract
+    UPDATE facebook_listing_raw
     SET valid_to = now()
     WHERE event_id = :event_id AND fb_listing_id = :fb_listing_id AND valid_to IS NULL
 """)
 
 
-def _build_params(record: dict, run_id: uuid.UUID, event_id: uuid.UUID) -> dict:
+def _build_params(record: dict, run_id: uuid.UUID, event_id: uuid.UUID, event_key: str) -> dict:
     """Build INSERT params from a raw Apify record."""
     price = record.get("price") or {}
     location = record.get("location") or {}
     image = record.get("primaryImage")
     return {
         "event_id": str(event_id),
+        "event_key": event_key,
         "pipeline_run_id": str(run_id),
         "fb_listing_id": record.get("listingId") or record.get("id"),
         "listing_url": record["url"],
@@ -181,6 +182,7 @@ def _process_records(
     records: list[dict],
     result: PipelineResult,
     event_id: uuid.UUID,
+    event_key: str,
 ) -> None:
     current_state = _load_current_state(session, event_id)
     logger.info(f"[Stage 1] {len(current_state)} existing current records in DB for this event")
@@ -194,7 +196,7 @@ def _process_records(
             logger.debug(f"Skipping record with no listing ID: {record.get('url')!r}")
             continue
 
-        params = _build_params(record, db_run.id, event_id)
+        params = _build_params(record, db_run.id, event_id, event_key)
         existing = current_state.get(listing_id)
 
         if existing is None:
@@ -217,7 +219,7 @@ def _process_records(
 # ── Entry points ──────────────────────────────────────────────────────────────
 
 
-def run(file_path: Path, event_id: uuid.UUID) -> PipelineResult:
+def run(file_path: Path, event_id: uuid.UUID, event_key: str) -> PipelineResult:
     """Run Stage 1 from a saved Apify JSON file (dev / backfill use)."""
     logger.info(f"[Stage 1] Starting — source: {file_path.name}")
 
@@ -240,7 +242,7 @@ def run(file_path: Path, event_id: uuid.UUID) -> PipelineResult:
             return result
 
         logger.info(f"[Stage 1] Loaded {len(records)} records from file")
-        _process_records(session, db_run, records, result, event_id)
+        _process_records(session, db_run, records, result, event_id, event_key)
         _finish_run(session, db_run, result)
 
     logger.info(
@@ -251,14 +253,14 @@ def run(file_path: Path, event_id: uuid.UUID) -> PipelineResult:
     return result
 
 
-def run_from_records(records: list[dict], source: str, event_id: uuid.UUID) -> PipelineResult:
+def run_from_records(records: list[dict], source: str, event_id: uuid.UUID, event_key: str) -> PipelineResult:
     """Run Stage 1 from records returned by ApifyRunner (live run)."""
     logger.info(f"[Stage 1] Starting — source: {source} ({len(records)} records)")
 
     with SessionLocal() as session:
         db_run = _create_run(session, source)
         result = PipelineResult(run_id=db_run.id, status="completed")
-        _process_records(session, db_run, records, result, event_id)
+        _process_records(session, db_run, records, result, event_id, event_key)
         _finish_run(session, db_run, result)
 
     logger.info(

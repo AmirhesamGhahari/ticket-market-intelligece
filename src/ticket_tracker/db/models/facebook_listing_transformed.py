@@ -21,10 +21,11 @@ class FacebookListingTransformed(Base):
     flagging, event day detection, and is_relevant scoring.
     """
 
-    __tablename__ = "transformed"
+    __tablename__ = "facebook_listing_transformed"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     event_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    event_key: Mapped[str] = mapped_column(String(64), nullable=False)
     raw_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     pipeline_run_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
 
@@ -64,15 +65,15 @@ class FacebookListingTransformed(Base):
     )
 
     __table_args__ = (
-        ForeignKeyConstraint(["event_id"], ["events.id"], name="fk_transformed_event_id"),
-        ForeignKeyConstraint(["raw_id"], ["raw_extract.id"], name="fk_transformed_raw_id"),
-        ForeignKeyConstraint(["pipeline_run_id"], ["pipeline_runs.id"], name="fk_transformed_run_id"),
-        UniqueConstraint("raw_id", name="uq_transformed_raw_id"),
+        ForeignKeyConstraint(["event_id"], ["events.id"], name="fk_fb_listing_transformed_event_id"),
+        ForeignKeyConstraint(["raw_id"], ["facebook_listing_raw.id"], name="fk_fb_listing_transformed_raw_id"),
+        ForeignKeyConstraint(["pipeline_run_id"], ["pipeline_runs.id"], name="fk_fb_listing_transformed_run_id"),
+        UniqueConstraint("raw_id", name="uq_fb_listing_transformed_raw_id"),
         # Compound leading indexes — event_id first
-        Index("idx_transformed_event_city", "event_id", "location_city"),
-        Index("idx_transformed_event_price", "event_id", "price"),
-        Index("idx_transformed_event_listed_at", "event_id", "listed_at"),
-        Index("idx_transformed_event_listing_id", "event_id", "fb_listing_id"),
-        Index("idx_transformed_seller", "seller_profile_id"),
-        Index("idx_transformed_pipeline_run", "pipeline_run_id"),
+        Index("idx_fb_listing_transformed_event_city", "event_id", "location_city"),
+        Index("idx_fb_listing_transformed_event_price", "event_id", "price"),
+        Index("idx_fb_listing_transformed_event_listed_at", "event_id", "listed_at"),
+        Index("idx_fb_listing_transformed_event_listing", "event_id", "fb_listing_id"),
+        Index("idx_fb_listing_transformed_seller", "seller_profile_id"),
+        Index("idx_fb_listing_transformed_pipeline_run", "pipeline_run_id"),
     )

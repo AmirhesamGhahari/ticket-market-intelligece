@@ -1,0 +1,98 @@
+event_key: "electric_island_sep_2026"
+event_name: "Electric_Island Festival Sep 2026"
+event_keyword: "electric_island"
+apify_actor_id: "raidr-api/facebook-marketplace-scraper"
+radius_km: "250"
+
+proxy:
+  use_apify_proxy: true
+  apify_proxy_groups: ["RESIDENTIAL"]
+  apify_proxy_country: "CA"
+
+# ── Search terms ───────────────────────────────────────────────────────────────
+# Shared across all cities and both run modes.
+# Apify advanced mode caps at 50 searches per actor run — trim if you exceed that.
+
+search_terms:
+  - "electric island"
+  - "electric island ticket"
+  - "electric island pass"
+  - "electric island 2 day"
+  - "electric island wristband"
+  - "electric island bracelet"
+  - "electric island single day"
+  - "electric island friday"
+  - "electric island saturday"
+  - "electric island vip"
+  - "electric island ga"
+
+
+search_terms_001:
+  - "veld"
+  - "veld 2026"
+  - "veld festival"
+  - "veld festival 2026"
+  - "veld music festival"
+  - "veld music festival 2026"
+  - "veld ticket"
+  - "veld tickets"
+  - "veld ticket 2026"
+  - "veld pass"
+  - "veld passes"
+  - "veld ticket pass"
+  - "veld weekend pass"
+  - "veld full weekend"
+  - "veld 3 day"
+  - "veld 3-day"
+  - "veld 3 day pass"
+  - "veld 3-day pass"
+  - "veld wristband"
+  - "veld bracelet"
+  - "veld single day"
+  - "veld single-day"
+  - "veld day pass"
+  - "veld friday"
+  - "veld friday pass"
+  - "veld saturday"
+  - "veld saturday pass"
+  - "veld sunday"
+  - "veld sunday pass"
+  - "veld day 1"
+  - "veld day 2"
+  - "veld day 3"
+  - "veld vip"
+  - "veld vip pass"
+  - "veld vip wristband"
+  - "veld ga"
+  - "veld ga pass"
+  - "veld general admission"
+  - "veld for sale"
+  - "veld tickets for sale"
+  - "selling veld tickets"
+  - "selling veld pass"
+  - "veld afterparty"
+
+# ── Initial run ────────────────────────────────────────────────────────────────
+# Run once to capture the full available history (~30-day FB window).
+# No date filter, no Apify-level dedup — get everything.
+# One actor run is made per city.
+
+initial_run:
+  cities:
+    - "Toronto, Ontario"
+  use_deduplication: false
+  fetch_detailed_items: false
+  listings_per_search: 500
+  filter_keywords: "electric_island"
+
+# ── Periodic run ───────────────────────────────────────────────────────────────
+# Run every 6 hours. Apify dedup skips listings seen in prior runs.
+# days_listed="1" keeps each search fast and cheap.
+
+periodic_run:
+  cities:
+    - "Toronto, Ontario"
+  use_deduplication: true
+  fetch_detailed_items: false
+  listings_per_search: 100
+  days_listed: "1"

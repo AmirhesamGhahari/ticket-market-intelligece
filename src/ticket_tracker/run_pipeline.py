@@ -189,7 +189,7 @@ def from_apify(config_name: str, mode: str, stage: str) -> None:
 
         source_label = f"{config_name}:{mode}"
         t0 = time.monotonic()
-        result1 = run_stage1_from_records(all_records, source=source_label, event_id=event_id)
+        result1 = run_stage1_from_records(all_records, source=source_label, event_id=event_id, event_key=config["event_key"])
         _print_result("STAGE 1 — Fetch & Extract", result1, time.monotonic() - t0)
 
     if stage in ("stage2", "all"):
@@ -233,7 +233,7 @@ def from_file(config_name: str, source_file: Path, stage: str) -> None:
 
     if stage in ("stage1", "all"):
         t0 = time.monotonic()
-        result1 = run_stage1(source_file, event_id=event_id)
+        result1 = run_stage1(source_file, event_id=event_id, event_key=config["event_key"])
         _print_result("STAGE 1 — Extract & Load", result1, time.monotonic() - t0)
 
     if stage in ("stage2", "all"):

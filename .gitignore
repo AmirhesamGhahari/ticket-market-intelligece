@@ -31,3 +31,11 @@ sample_data/
 
 #Claude
 .claude/
+
+# Terraform
+infra/terraform/.terraform/
+infra/terraform/.terraform.lock.hcl
+infra/terraform/*.tfstate
+infra/terraform/*.tfstate.backup
+infra/terraform/terraform.tfvars
+infra/terraform/modules/scheduler/fanout.zip

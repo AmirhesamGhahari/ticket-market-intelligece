@@ -1,0 +1,15 @@
+region             = "ca-central-1"
+app_name           = "ticket-tracker"
+
+apify_api_token    = "apify_api_REPLACE_ME"
+db_master_username = "ticket_tracker"
+db_master_password = "REPLACE_ME_secure_password_min_8_chars"
+db_name            = "ticket_tracker"
+
+alert_email    = "you@example.com"
+github_owner   = "your-github-username"
+github_repo    = "ticket-tracker"
+github_branch  = "main"
+
+# Optional: override the default list of event configs scheduled to run
+# event_configs = ["veld_2026", "electric_island_sep2026"]

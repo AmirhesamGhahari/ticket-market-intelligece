@@ -18,7 +18,7 @@ resource "aws_rds_cluster" "main" {
 
   serverlessv2_scaling_configuration {
     min_capacity = 0
-    max_capacity = 4
+    max_capacity = 2
   }
 }
 

@@ -1,0 +1,28 @@
+version: 0.2
+
+phases:
+  pre_build:
+    commands:
+      - aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REPO_URL
+      - COMMIT_ID=$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | cut -c1-8)
+
+  build:
+    commands:
+      - docker build -t $ECR_REPO_URL:$COMMIT_ID -t $ECR_REPO_URL:latest .
+
+  post_build:
+    commands:
+      - docker push $ECR_REPO_URL:$COMMIT_ID
+      - docker push $ECR_REPO_URL:latest
+      - |
+        TASK_DEF=$(aws ecs describe-task-definition \
+          --task-definition $TASK_FAMILY \
+          --query 'taskDefinition' \
+          --output json)
+        NEW_TASK_DEF=$(echo "$TASK_DEF" | jq \
+          --arg IMAGE "$ECR_REPO_URL:$COMMIT_ID" \
+          'del(.taskDefinitionArn,.revision,.status,.requiresAttributes,
+               .placementConstraints,.compatibilities,.registeredAt,.registeredBy)
+           | .containerDefinitions[0].image = $IMAGE')
+        aws ecs register-task-definition --cli-input-json "$NEW_TASK_DEF"
+        echo "Deployed image $ECR_REPO_URL:$COMMIT_ID"

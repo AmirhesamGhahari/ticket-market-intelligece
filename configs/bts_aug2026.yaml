@@ -30,7 +30,7 @@ initial_run:
     - "Toronto, Ontario"
   use_deduplication: false
   fetch_detailed_items: false
-  listings_per_search: 500
+  listings_per_search: 200
   filter_keywords: "bts"
 
 # ── Periodic run ───────────────────────────────────────────────────────────────

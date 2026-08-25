@@ -75,7 +75,7 @@ resource "aws_cloudwatch_event_target" "ecs_task_failed_to_sns" {
 # Alarm 3: Application-level pipeline failures logged to CloudWatch
 resource "aws_cloudwatch_log_metric_filter" "pipeline_failures" {
   name           = "${var.app_name}-pipeline-failures"
-  pattern        = "\"status\": \"failed\""
+  pattern        = "{ $.status = \"failed\" }"
   log_group_name = var.log_group_name
 
   metric_transformation {

@@ -12,12 +12,11 @@ terraform {
     }
   }
 
-  # Uncomment to use an S3 backend for shared/persistent state:
-  # backend "s3" {
-  #   bucket = "your-terraform-state-bucket"
-  #   key    = "ticket-tracker/terraform.tfstate"
-  #   region = "ca-central-1"
-  # }
+  backend "s3" {
+    bucket = "ticket-price-tracker-terraform-state"
+    key    = "ticket-price-tracker/terraform.tfstate"
+    region = "ca-central-1"
+  }
 }
 
 provider "aws" {

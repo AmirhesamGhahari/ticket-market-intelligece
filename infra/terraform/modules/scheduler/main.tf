@@ -118,6 +118,6 @@ resource "aws_scheduler_schedule" "periodic" {
   target {
     arn      = aws_lambda_function.fanout.arn
     role_arn = aws_iam_role.scheduler.arn
-    input    = jsonencode({ mode = "periodic" })
+    input    = jsonencode({ mode = "initial" })
   }
 }

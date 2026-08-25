@@ -7,7 +7,7 @@ variable "region" {
 variable "app_name" {
   description = "Application name used for resource naming"
   type        = string
-  default     = "ticket-tracker"
+  default     = "ticket-price-tracker"
 }
 
 variable "apify_api_token" {
@@ -19,7 +19,7 @@ variable "apify_api_token" {
 variable "db_master_username" {
   description = "Aurora master username"
   type        = string
-  default     = "ticket_tracker"
+  default     = "amir_ghahari"
 }
 
 variable "db_master_password" {
@@ -31,7 +31,7 @@ variable "db_master_password" {
 variable "db_name" {
   description = "Aurora database name"
   type        = string
-  default     = "ticket_tracker"
+  default     = "ticket_price_tracker"
 }
 
 variable "alert_email" {

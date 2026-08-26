@@ -42,6 +42,13 @@ logger.add(sys.stderr, format="<level>{level: <8}</level> | {message}", level="I
 _CONFIGS_DIR = Path.cwd() / "configs"
 
 
+def _run_migrations() -> None:
+    from alembic import command as alembic_command
+    from alembic.config import Config
+    cfg = Config("alembic.ini")
+    alembic_command.upgrade(cfg, "head")
+
+
 # ── Config helpers ────────────────────────────────────────────────────────────
 
 
@@ -145,6 +152,7 @@ def _print_result(title: str, result, elapsed: float) -> None:
 @click.group()
 def cli() -> None:
     """Ticket Market Intelligence — data pipeline runner."""
+    _run_migrations()
 
 
 # ── from-apify ────────────────────────────────────────────────────────────────

@@ -3,6 +3,13 @@ version: 0.2
 phases:
   pre_build:
     commands:
+      - |
+        CHANGED=$(git diff --name-only HEAD~1 HEAD 2>/dev/null || echo "ALL")
+        if [ "$CHANGED" != "ALL" ] && ! echo "$CHANGED" | grep -qvE '^infra/'; then
+          echo "Only infra/ files changed — skipping Docker build"
+          exit 0
+        fi
+        echo "App files changed — proceeding with build"
       - aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REPO_URL
       - COMMIT_ID=$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | cut -c1-8)
 

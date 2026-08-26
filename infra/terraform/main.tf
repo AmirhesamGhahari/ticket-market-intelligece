@@ -12,7 +12,7 @@ module "ecr" {
 module "aurora" {
   source             = "./modules/aurora"
   app_name           = var.app_name
-  private_subnet_ids = module.networking.private_subnet_ids
+  public_subnet_ids = module.networking.public_subnet_ids
   aurora_sg_id       = module.networking.aurora_sg_id
   db_master_username = var.db_master_username
   db_master_password = var.db_master_password

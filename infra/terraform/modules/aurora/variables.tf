@@ -2,7 +2,7 @@ variable "app_name" {
   type = string
 }
 
-variable "private_subnet_ids" {
+variable "public_subnet_ids" {
   type = list(string)
 }
 

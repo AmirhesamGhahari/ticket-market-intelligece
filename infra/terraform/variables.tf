@@ -58,5 +58,5 @@ variable "github_branch" {
 variable "event_configs" {
   description = "List of event config names (YAML files in configs/) to run on each schedule"
   type        = list(string)
-  default     = ["veld_2026", "electric_island_sep2026", "nocturnal_wonderland_2026", "osheaga_2026"]
+  # default     = ["veld_2026", "electric_island_sep2026", "nocturnal_wonderland_2026", "osheaga_2026"]
 }

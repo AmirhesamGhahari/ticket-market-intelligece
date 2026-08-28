@@ -12,7 +12,7 @@ def lambda_handler(event, context):
     subnets = os.environ["SUBNET_IDS"].split(",")
     sg = os.environ["SECURITY_GROUP_ID"]
     event_configs = json.loads(os.environ["EVENT_CONFIGS"])
-    mode = event.get("mode", "initial")
+    mode = event.get("mode", "periodic")
 
     results = []
     for config_name in event_configs:

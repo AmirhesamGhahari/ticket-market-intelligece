@@ -30,8 +30,8 @@ initial_run:
     - "Toronto, Ontario"
   use_deduplication: false
   fetch_detailed_items: false
-  listings_per_search: 100
-  filter_keywords: "island"
+  listings_per_search: 300
+  filter_keywords: "electric island"
 
 # ── Periodic run ───────────────────────────────────────────────────────────────
 # Run every 6 hours. Apify dedup skips listings seen in prior runs.
@@ -40,7 +40,7 @@ initial_run:
 periodic_run:
   cities:
     - "Toronto, Ontario"
-  use_deduplication: true
+  use_deduplication: false
   fetch_detailed_items: false
   listings_per_search: 100
-  days_listed: "1"
+  filter_keywords: "electric island"

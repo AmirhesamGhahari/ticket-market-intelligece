@@ -10,7 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from ticket_tracker.config import settings
 from ticket_tracker.db.base import Base
-from ticket_tracker.db.models import pipeline_tables, event, facebook_listing_raw, facebook_listing_transformed  # noqa: F401 — registers models with Base.metadata
+from ticket_tracker.db.models import pipeline_tables, event, facebook_listing_raw, facebook_listing_classification  # noqa: F401 — registers models with Base.metadata
 
 config = context.config
 

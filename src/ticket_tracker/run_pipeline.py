@@ -8,8 +8,9 @@ Commands:
     # Load from a saved Apify JSON file (dev / backfill)
     run-pipeline from-file --config veld_2026 --file sample_data/actual_data_raider_craper.json
 
-    # Re-run Stage 2 transform only (no new data needed)
-    run-pipeline transform --config veld_2026
+    # Classify only — run across all events or a specific one
+    run-pipeline classify
+    run-pipeline classify --config veld_2026
 """
 
 from __future__ import annotations
@@ -18,6 +19,7 @@ import sys
 import time
 import uuid
 from pathlib import Path
+from typing import Optional
 
 import click
 import yaml
@@ -31,7 +33,7 @@ from ticket_tracker.config import settings
 from ticket_tracker.db.engine import SessionLocal
 from ticket_tracker.pipeline.stage1_extract.pipeline import run as run_stage1
 from ticket_tracker.pipeline.stage1_extract.pipeline import run_from_records as run_stage1_from_records
-from ticket_tracker.pipeline.stage2_transform.pipeline import run as run_stage2
+from ticket_tracker.pipeline.stage2_classify.pipeline import run as run_classify
 from ticket_tracker.scraper.apify import ApifyRunner
 
 console = Console()
@@ -126,7 +128,7 @@ def _build_run_inputs(config: dict, mode: str) -> list[dict]:
 # ── Formatting helpers ────────────────────────────────────────────────────────
 
 
-def _print_result(title: str, result, elapsed: float) -> None:
+def _print_scrape_result(title: str, result, elapsed: float) -> None:
     console.print(Rule(f"[bold cyan]{title}[/bold cyan]"))
 
     table = Table(show_header=False, box=None, padding=(0, 2))
@@ -139,6 +141,24 @@ def _print_result(title: str, result, elapsed: float) -> None:
     table.add_row("[green]✓ Newly added[/green]", f"[green]{result.newly_added}[/green]")
     table.add_row("[cyan]~ Changed version[/cyan]", f"[cyan]{result.change_added}[/cyan]")
     table.add_row("[dim]– Skipped[/dim]", f"[dim]{result.skipped}[/dim]")
+    table.add_row("[red]✗ Errors[/red]", f"[red]{result.errors}[/red]")
+
+    console.print(table)
+    console.print(f"  [dim]Elapsed: {elapsed:.1f}s[/dim]")
+    console.print()
+
+
+def _print_classify_result(title: str, result, elapsed: float) -> None:
+    console.print(Rule(f"[bold cyan]{title}[/bold cyan]"))
+
+    table = Table(show_header=False, box=None, padding=(0, 2))
+    table.add_column(style="dim", width=26)
+    table.add_column()
+
+    table.add_row("Run ID", str(result.run_id))
+    table.add_row("Status", result.status)
+    table.add_row("Total pending", str(result.total))
+    table.add_row("[green]✓ Classified[/green]", f"[green]{result.classified}[/green]")
     table.add_row("[red]✗ Errors[/red]", f"[red]{result.errors}[/red]")
 
     console.print(table)
@@ -171,9 +191,9 @@ def cli() -> None:
 )
 @click.option(
     "--stage", "-s",
-    type=click.Choice(["stage1", "stage2", "all"], case_sensitive=False),
+    type=click.Choice(["scrape", "classify", "all"], case_sensitive=False),
     default="all", show_default=True,
-    help="Which pipeline stage to run.",
+    help="scrape = fetch & store raw only. classify = LLM classify only. all = both.",
 )
 def from_apify(config_name: str, mode: str, stage: str) -> None:
     """Fetch listings from Apify for every city in the config and run the pipeline."""
@@ -183,9 +203,8 @@ def from_apify(config_name: str, mode: str, stage: str) -> None:
 
     config = _load_config(config_name)
     event_id = _resolve_event(config)
-    event_keyword = config["event_keyword"]
 
-    if stage in ("stage1", "all"):
+    if stage in ("scrape", "all"):
         run_inputs = _build_run_inputs(config, mode)
         runner = ApifyRunner(settings.apify_api_token, config["apify_actor_id"])
 
@@ -198,12 +217,12 @@ def from_apify(config_name: str, mode: str, stage: str) -> None:
         source_label = f"{config_name}:{mode}"
         t0 = time.monotonic()
         result1 = run_stage1_from_records(all_records, source=source_label, event_id=event_id, event_key=config["event_key"])
-        _print_result("STAGE 1 — Fetch & Extract", result1, time.monotonic() - t0)
+        _print_scrape_result("STAGE 1 — Fetch & Extract", result1, time.monotonic() - t0)
 
-    if stage in ("stage2", "all"):
+    if stage in ("classify", "all"):
         t0 = time.monotonic()
-        result2 = run_stage2(event_id=event_id, event_keyword=event_keyword)
-        _print_result("STAGE 2 — Transform", result2, time.monotonic() - t0)
+        result2 = run_classify(event_id=event_id)
+        _print_classify_result("STAGE 2 — LLM Classify", result2, time.monotonic() - t0)
 
     console.print(Rule(f"[dim]Done in {time.monotonic() - total_start:.1f}s[/dim]"))
     console.print()
@@ -225,9 +244,9 @@ def from_apify(config_name: str, mode: str, stage: str) -> None:
 )
 @click.option(
     "--stage", "-s",
-    type=click.Choice(["stage1", "stage2", "all"], case_sensitive=False),
+    type=click.Choice(["scrape", "classify", "all"], case_sensitive=False),
     default="all", show_default=True,
-    help="Which pipeline stage to run.",
+    help="scrape = load raw records only. classify = LLM classify only. all = both.",
 )
 def from_file(config_name: str, source_file: Path, stage: str) -> None:
     """Load listings from a saved Apify JSON file and run the pipeline."""
@@ -237,41 +256,44 @@ def from_file(config_name: str, source_file: Path, stage: str) -> None:
 
     config = _load_config(config_name)
     event_id = _resolve_event(config)
-    event_keyword = config["event_keyword"]
 
-    if stage in ("stage1", "all"):
+    if stage in ("scrape", "all"):
         t0 = time.monotonic()
         result1 = run_stage1(source_file, event_id=event_id, event_key=config["event_key"])
-        _print_result("STAGE 1 — Extract & Load", result1, time.monotonic() - t0)
+        _print_scrape_result("STAGE 1 — Extract & Load", result1, time.monotonic() - t0)
 
-    if stage in ("stage2", "all"):
+    if stage in ("classify", "all"):
         t0 = time.monotonic()
-        result2 = run_stage2(event_id=event_id, event_keyword=event_keyword)
-        _print_result("STAGE 2 — Transform", result2, time.monotonic() - t0)
+        result2 = run_classify(event_id=event_id)
+        _print_classify_result("STAGE 2 — LLM Classify", result2, time.monotonic() - t0)
 
     console.print(Rule(f"[dim]Done in {time.monotonic() - total_start:.1f}s[/dim]"))
     console.print()
 
 
-# ── transform ─────────────────────────────────────────────────────────────────
+# ── classify ──────────────────────────────────────────────────────────────────
 
 
-@cli.command("transform")
+@cli.command("classify")
 @click.option(
-    "--config", "-c", "config_name", required=True,
-    help="Event config name (e.g. veld_2026). Looks in configs/ directory.",
+    "--config", "-c", "config_name", required=False, default=None,
+    help="Event config name. Omit to classify all unclassified listings across all events.",
 )
-def transform(config_name: str) -> None:
-    """Run Stage 2 transform on pending raw records for this event (no new data needed)."""
+def classify_cmd(config_name: Optional[str]) -> None:
+    """Run LLM classification on unclassified raw listings.
+
+    Without --config, classifies all unclassified listings across every event.
+    """
     console.print()
     t0 = time.monotonic()
 
-    config = _load_config(config_name)
-    event_id = _resolve_event(config)
-    event_keyword = config["event_keyword"]
+    event_id = None
+    if config_name:
+        config = _load_config(config_name)
+        event_id = _resolve_event(config)
 
-    result = run_stage2(event_id=event_id, event_keyword=event_keyword)
-    _print_result("STAGE 2 — Transform", result, time.monotonic() - t0)
+    result = run_classify(event_id=event_id)
+    _print_classify_result("STAGE 2 — LLM Classify", result, time.monotonic() - t0)
     console.print(Rule(f"[dim]Done in {time.monotonic() - t0:.1f}s[/dim]"))
     console.print()
 

@@ -11,9 +11,8 @@ from loguru import logger
 
 from ticket_tracker.config import settings
 
-_MODEL_NAME = "gemini-2.0-flash"
-_RATE_LIMIT_SLEEP = 4.0  # Gemini free tier = 15 RPM (1 per 4s). API call takes ~1-3s,
-                          # so 4s sleep keeps us comfortably under the limit.
+_MODEL_NAME = "gemini-3.1-flash-lite"
+_RATE_LIMIT_SLEEP = 8.0  
 
 # ── System instruction ─────────────────────────────────────────────────────────
 # Passed as system_instruction to Gemini — separated from listing data so the

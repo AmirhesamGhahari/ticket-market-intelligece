@@ -17,3 +17,7 @@ variable "db_url_secret_arn" {
 variable "apify_token_secret_arn" {
   type = string
 }
+
+variable "gemini_api_key_secret_arn" {
+  type = string
+}

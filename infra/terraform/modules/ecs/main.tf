@@ -37,7 +37,8 @@ resource "aws_iam_role_policy" "execution_secrets" {
       Action = ["secretsmanager:GetSecretValue"]
       Resource = [
         var.db_url_secret_arn,
-        var.apify_token_secret_arn
+        var.apify_token_secret_arn,
+        var.gemini_api_key_secret_arn
       ]
     }]
   })
@@ -87,6 +88,10 @@ resource "aws_ecs_task_definition" "pipeline" {
       {
         name      = "APIFY_API_TOKEN"
         valueFrom = var.apify_token_secret_arn
+      },
+      {
+        name      = "GEMINI_API_KEY"
+        valueFrom = var.gemini_api_key_secret_arn
       }
     ]
 

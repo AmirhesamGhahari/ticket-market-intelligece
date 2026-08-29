@@ -16,6 +16,12 @@ variable "apify_api_token" {
   sensitive   = true
 }
 
+variable "gemini_api_key" {
+  description = "Google Gemini API key for LLM classification"
+  type        = string
+  sensitive   = true
+}
+
 variable "db_master_username" {
   description = "Aurora master username"
   type        = string

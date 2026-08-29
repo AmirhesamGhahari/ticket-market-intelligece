@@ -7,6 +7,11 @@ variable "apify_api_token" {
   sensitive = true
 }
 
+variable "gemini_api_key" {
+  type      = string
+  sensitive = true
+}
+
 variable "db_master_username" {
   type = string
 }

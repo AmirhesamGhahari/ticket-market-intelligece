@@ -39,6 +39,12 @@ TICKET SALE (is_ticket = true):
 • Someone is SELLING admission tickets to an event
 • Title/description contains: "selling", "for sale", "vends", price > $10
 • May include quantity ("2x tickets"), ticket tier (VIP, GA), and event days
+• MINIMAL LISTING RULE: if the title is solely or mainly a known event name \
+(e.g. just "Electric Island", "VELD 2026", "Osheaga") with little or no description, \
+AND the price is > $10, AND there are no buyer signals (no ISO/cherche/looking for) \
+and no merch signals (no clothing/album/glow stick mentions) → classify as \
+is_ticket=true with confidence="medium". On Facebook Marketplace, a bare event name \
+with a plausible ticket price is almost always someone selling a ticket.
 
 BUYER / WANTED (is_buyer_listing = true):
 • Someone is LOOKING TO BUY tickets — do NOT classify as is_ticket

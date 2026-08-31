@@ -221,7 +221,7 @@ def from_apify(config_name: str, mode: str, stage: str) -> None:
 
     if stage in ("classify", "all"):
         t0 = time.monotonic()
-        result2 = run_classify(event_id=event_id)
+        result2 = run_classify(event_id=event_id, event_key=config["event_key"])
         _print_classify_result("STAGE 2 — LLM Classify", result2, time.monotonic() - t0)
 
     console.print(Rule(f"[dim]Done in {time.monotonic() - total_start:.1f}s[/dim]"))
@@ -264,7 +264,7 @@ def from_file(config_name: str, source_file: Path, stage: str) -> None:
 
     if stage in ("classify", "all"):
         t0 = time.monotonic()
-        result2 = run_classify(event_id=event_id)
+        result2 = run_classify(event_id=event_id, event_key=config["event_key"])
         _print_classify_result("STAGE 2 — LLM Classify", result2, time.monotonic() - t0)
 
     console.print(Rule(f"[dim]Done in {time.monotonic() - total_start:.1f}s[/dim]"))
@@ -288,11 +288,13 @@ def classify_cmd(config_name: Optional[str]) -> None:
     t0 = time.monotonic()
 
     event_id = None
+    event_key = None
     if config_name:
         config = _load_config(config_name)
         event_id = _resolve_event(config)
+        event_key = config["event_key"]
 
-    result = run_classify(event_id=event_id)
+    result = run_classify(event_id=event_id, event_key=event_key)
     _print_classify_result("STAGE 2 — LLM Classify", result, time.monotonic() - t0)
     console.print(Rule(f"[dim]Done in {time.monotonic() - t0:.1f}s[/dim]"))
     console.print()

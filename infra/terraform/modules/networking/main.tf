@@ -82,7 +82,7 @@ resource "aws_security_group" "aurora" {
     from_port       = 5432
     to_port         = 5432
     protocol        = "tcp"
-    cidr_blocks      = ["209.171.14.63/32", "173.33.70.59/32"]
+    cidr_blocks      = ["209.171.14.63/32", "173.33.70.59/32", "209.171.14.55/32"]
     description     = "PostgreSQL from my laptop"
   }
 

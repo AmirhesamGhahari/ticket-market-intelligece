@@ -68,15 +68,16 @@ class ClassifyResult:
     errors: int = 0
 
 
-def run(event_id: Optional[uuid.UUID] = None) -> ClassifyResult:
+def run(event_id: Optional[uuid.UUID] = None, event_key: Optional[str] = None) -> ClassifyResult:
     """Classify all unclassified current-version raw listings via Gemini.
 
     Pass event_id to restrict to one event, or omit to classify across all events.
+    event_key is used as a human-readable source label in the pipeline_runs record.
     Idempotent: records already in facebook_listing_classifications are skipped via NOT EXISTS.
     Failed batches are logged and retried on the next run.
     """
     with SessionLocal() as session:
-        db_run = _create_run(session, event_id)
+        db_run = _create_run(session, event_key)
         result = ClassifyResult(run_id=db_run.id, status="completed")
 
         if event_id:
@@ -120,7 +121,7 @@ def run(event_id: Optional[uuid.UUID] = None) -> ClassifyResult:
                 for row, clf in zip(rows, classifications):
                     session.add(FacebookListingClassification(
                         raw_listing_id=row.id,
-                        llm_model="gemini-2.0-flash",
+                        llm_model="gemini-3.1-flash-lite",
                         is_ticket=bool(clf.get("is_ticket", False)),
                         is_buyer_listing=bool(clf.get("is_buyer_listing", False)),
                         is_merch=bool(clf.get("is_merch", False)),
@@ -160,10 +161,10 @@ def run(event_id: Optional[uuid.UUID] = None) -> ClassifyResult:
     return result
 
 
-def _create_run(session: Session, event_id: Optional[uuid.UUID]) -> PipelineRun:
+def _create_run(session: Session, event_key: Optional[str]) -> PipelineRun:
     run = PipelineRun(
         stage="stage2",
-        source=str(event_id) if event_id else "all",
+        source=event_key if event_key else "all",
         status="running",
     )
     session.add(run)

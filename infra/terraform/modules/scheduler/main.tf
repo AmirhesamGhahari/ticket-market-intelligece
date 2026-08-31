@@ -112,7 +112,7 @@ resource "aws_scheduler_schedule" "periodic" {
     mode = "OFF"
   }
 
-  schedule_expression          = "cron(0 */6 * * ? *)"
+  schedule_expression          = "cron(0 */8 * * ? *)"
   schedule_expression_timezone = "UTC"
 
   target {

@@ -43,5 +43,5 @@ periodic_run:
   use_deduplication: false
   fetch_detailed_items: false
   listings_per_search: 80
-  days_listed: "15"
+  days_listed: "30"
   filter_keywords: "iron maiden"

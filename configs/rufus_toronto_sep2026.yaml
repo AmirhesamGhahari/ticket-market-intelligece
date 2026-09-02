@@ -2,6 +2,7 @@ event_key: "rufus_du_sol_toronto_sep2026"
 event_name: "Rufus Du Sol Toronto Tour Sep 2026"
 event_keyword: "rufus_du_sol_toronto_sep2026"
 apify_actor_id: "raidr-api/facebook-marketplace-scraper"
+seatgeek_event_id: null  # find at seatgeek.com — search Rufus Du Sol Toronto and grab the ID from the URL
 radius_km: "500"
 
 proxy:

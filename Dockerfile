@@ -9,5 +9,3 @@ COPY alembic/ alembic/
 COPY alembic.ini alembic.ini
 
 RUN pip install --no-cache-dir -e .
-
-ENTRYPOINT ["run-pipeline"]

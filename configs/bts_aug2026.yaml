@@ -2,6 +2,7 @@ event_key: "bts_arirang_aug_2026"
 event_name: "Electric_Island Festival Sep 2026"
 event_keyword: "bts_arirang"
 apify_actor_id: "raidr-api/facebook-marketplace-scraper"
+seatgeek_event_id: null  # find at seatgeek.com — search BTS and grab the ID from the URL
 radius_km: "250"
 
 proxy:

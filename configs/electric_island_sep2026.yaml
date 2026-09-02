@@ -2,6 +2,7 @@ event_key: "electric_island_sep_2026"
 event_name: "Electric_Island Festival Sep 2026"
 event_keyword: "electric_island"
 apify_actor_id: "raidr-api/facebook-marketplace-scraper"
+seatgeek_event_id: null  # find at seatgeek.com — search Electric Island and grab the ID from the URL
 radius_km: "250"
 
 proxy:

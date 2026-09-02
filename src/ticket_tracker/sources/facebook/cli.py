@@ -1,16 +1,11 @@
-"""CLI entry point for the data pipeline.
+"""Facebook Marketplace pipeline CLI.
 
 Commands:
-    # Fetch live from Apify and run both stages (cities come from the config file)
-    run-pipeline from-apify --config veld_2026 --mode initial
-    run-pipeline from-apify --config veld_2026 --mode periodic
-
-    # Load from a saved Apify JSON file (dev / backfill)
-    run-pipeline from-file --config veld_2026 --file sample_data/actual_data_raider_craper.json
-
-    # Classify only — run across all events or a specific one
-    run-pipeline classify
-    run-pipeline classify --config veld_2026
+    run-facebook from-apify --config veld_2026 --mode initial
+    run-facebook from-apify --config veld_2026 --mode periodic
+    run-facebook from-file --config veld_2026 --file sample_data/data.json
+    run-facebook classify
+    run-facebook classify --config veld_2026
 """
 
 from __future__ import annotations
@@ -31,10 +26,10 @@ from sqlalchemy import text
 
 from ticket_tracker.config import settings
 from ticket_tracker.db.engine import SessionLocal
-from ticket_tracker.pipeline.stage1_extract.pipeline import run as run_stage1
-from ticket_tracker.pipeline.stage1_extract.pipeline import run_from_records as run_stage1_from_records
-from ticket_tracker.pipeline.stage2_classify.pipeline import run as run_classify
-from ticket_tracker.scraper.apify import ApifyRunner
+from ticket_tracker.sources.facebook.scraper import ApifyRunner
+from ticket_tracker.sources.facebook.stage1 import run as run_stage1
+from ticket_tracker.sources.facebook.stage1 import run_from_records as run_stage1_from_records
+from ticket_tracker.sources.facebook.stage2_classify import run as run_classify
 
 console = Console()
 
@@ -65,7 +60,6 @@ def _load_config(config_name: str) -> dict:
 
 
 def _resolve_event(config: dict) -> uuid.UUID:
-    """Upsert the event into the events table and return its UUID."""
     with SessionLocal() as session:
         session.execute(
             text("""
@@ -88,7 +82,6 @@ def _resolve_event(config: dict) -> uuid.UUID:
 
 
 def _build_run_inputs(config: dict, mode: str) -> list[dict]:
-    """Return one Apify run_input dict per city defined in the config for this mode."""
     run_config = config[f"{mode}_run"]
 
     searches = []
@@ -130,11 +123,9 @@ def _build_run_inputs(config: dict, mode: str) -> list[dict]:
 
 def _print_scrape_result(title: str, result, elapsed: float) -> None:
     console.print(Rule(f"[bold cyan]{title}[/bold cyan]"))
-
     table = Table(show_header=False, box=None, padding=(0, 2))
     table.add_column(style="dim", width=26)
     table.add_column()
-
     table.add_row("Run ID", str(result.run_id))
     table.add_row("Status", result.status)
     table.add_row("Total records", str(result.total))
@@ -142,7 +133,6 @@ def _print_scrape_result(title: str, result, elapsed: float) -> None:
     table.add_row("[cyan]~ Changed version[/cyan]", f"[cyan]{result.change_added}[/cyan]")
     table.add_row("[dim]– Skipped[/dim]", f"[dim]{result.skipped}[/dim]")
     table.add_row("[red]✗ Errors[/red]", f"[red]{result.errors}[/red]")
-
     console.print(table)
     console.print(f"  [dim]Elapsed: {elapsed:.1f}s[/dim]")
     console.print()
@@ -150,17 +140,14 @@ def _print_scrape_result(title: str, result, elapsed: float) -> None:
 
 def _print_classify_result(title: str, result, elapsed: float) -> None:
     console.print(Rule(f"[bold cyan]{title}[/bold cyan]"))
-
     table = Table(show_header=False, box=None, padding=(0, 2))
     table.add_column(style="dim", width=26)
     table.add_column()
-
     table.add_row("Run ID", str(result.run_id))
     table.add_row("Status", result.status)
     table.add_row("Total pending", str(result.total))
     table.add_row("[green]✓ Classified[/green]", f"[green]{result.classified}[/green]")
     table.add_row("[red]✗ Errors[/red]", f"[red]{result.errors}[/red]")
-
     console.print(table)
     console.print(f"  [dim]Elapsed: {elapsed:.1f}s[/dim]")
     console.print()
@@ -171,7 +158,7 @@ def _print_classify_result(title: str, result, elapsed: float) -> None:
 
 @click.group()
 def cli() -> None:
-    """Ticket Market Intelligence — data pipeline runner."""
+    """Ticket Market Intelligence — Facebook Marketplace pipeline."""
     _run_migrations()
 
 
@@ -179,21 +166,16 @@ def cli() -> None:
 
 
 @cli.command("from-apify")
-@click.option(
-    "--config", "-c", "config_name", required=True,
-    help="Event config name (e.g. veld_2026). Looks in configs/ directory.",
-)
+@click.option("--config", "-c", "config_name", required=True)
 @click.option(
     "--mode", "-m",
     type=click.Choice(["initial", "periodic"], case_sensitive=False),
     required=True,
-    help="initial = full history fetch. periodic = recent listings only.",
 )
 @click.option(
     "--stage", "-s",
     type=click.Choice(["scrape", "classify", "all"], case_sensitive=False),
     default="all", show_default=True,
-    help="scrape = fetch & store raw only. classify = LLM classify only. all = both.",
 )
 def from_apify(config_name: str, mode: str, stage: str) -> None:
     """Fetch listings from Apify for every city in the config and run the pipeline."""
@@ -232,21 +214,16 @@ def from_apify(config_name: str, mode: str, stage: str) -> None:
 
 
 @cli.command("from-file")
-@click.option(
-    "--config", "-c", "config_name", required=True,
-    help="Event config name (e.g. veld_2026). Looks in configs/ directory.",
-)
+@click.option("--config", "-c", "config_name", required=True)
 @click.option(
     "--file", "-f", "source_file",
     required=True,
     type=click.Path(path_type=Path, exists=True),
-    help="Path to a saved Apify JSON file.",
 )
 @click.option(
     "--stage", "-s",
     type=click.Choice(["scrape", "classify", "all"], case_sensitive=False),
     default="all", show_default=True,
-    help="scrape = load raw records only. classify = LLM classify only. all = both.",
 )
 def from_file(config_name: str, source_file: Path, stage: str) -> None:
     """Load listings from a saved Apify JSON file and run the pipeline."""
@@ -275,10 +252,7 @@ def from_file(config_name: str, source_file: Path, stage: str) -> None:
 
 
 @cli.command("classify")
-@click.option(
-    "--config", "-c", "config_name", required=False, default=None,
-    help="Event config name. Omit to classify all unclassified listings across all events.",
-)
+@click.option("--config", "-c", "config_name", required=False, default=None)
 def classify_cmd(config_name: Optional[str]) -> None:
     """Run LLM classification on unclassified raw listings.
 

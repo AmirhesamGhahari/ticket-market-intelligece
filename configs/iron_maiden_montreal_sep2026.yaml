@@ -2,6 +2,7 @@ event_key: "iron_maiden_montreal_sep2026"
 event_name: "Iron Maiden Montreal Tour Sep 2026"
 event_keyword: "iron_maiden_montreal"
 apify_actor_id: "raidr-api/facebook-marketplace-scraper"
+seatgeek_event_id: null  # find at seatgeek.com — search Iron Maiden Montreal and grab the ID from the URL
 radius_km: "250"
 
 proxy:

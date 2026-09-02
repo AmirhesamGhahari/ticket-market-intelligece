@@ -1,4 +1,4 @@
-"""Stage 1 extract pipeline.
+"""Facebook Marketplace — Stage 1 extract pipeline.
 
 Reads Apify raider-api records and loads them into facebook_listing_raw
 using CDC (Change Data Capture) keyed on (event_id, fb_listing_id).
@@ -80,7 +80,6 @@ _CDC_FIELDS = ("price", "is_sold", "title", "location_city", "location_state")
 
 
 def _load_current_state(session: Session, event_id: uuid.UUID) -> dict[str, dict]:
-    """Bulk-load all current records for this event (valid_to IS NULL) into memory."""
     rows = session.execute(
         text("""
             SELECT fb_listing_id, price, is_sold, title, location_city, location_state
@@ -126,7 +125,6 @@ _CLOSE_CURRENT_SQL = text("""
 
 
 def _build_params(record: dict, run_id: uuid.UUID, event_id: uuid.UUID, event_key: str) -> dict:
-    """Build INSERT params from a raw Apify record."""
     price = record.get("price") or {}
     location = record.get("location") or {}
     image = record.get("primaryImage")
@@ -155,7 +153,7 @@ def _build_params(record: dict, run_id: uuid.UUID, event_id: uuid.UUID, event_ke
 
 
 def _create_run(session: Session, source: str) -> PipelineRun:
-    run = PipelineRun(stage="stage1", source=source, status="running")
+    run = PipelineRun(stage="stage1_facebook", source=source, status="running")
     session.add(run)
     session.commit()
     session.refresh(run)
@@ -185,7 +183,7 @@ def _process_records(
     event_key: str,
 ) -> None:
     current_state = _load_current_state(session, event_id)
-    logger.info(f"[Stage 1] {len(current_state)} existing current records in DB for this event")
+    logger.info(f"[FB Stage 1] {len(current_state)} existing current records in DB for this event")
 
     for record in records:
         result.total += 1
@@ -221,7 +219,7 @@ def _process_records(
 
 def run(file_path: Path, event_id: uuid.UUID, event_key: str) -> PipelineResult:
     """Run Stage 1 from a saved Apify JSON file (dev / backfill use)."""
-    logger.info(f"[Stage 1] Starting — source: {file_path.name}")
+    logger.info(f"[FB Stage 1] Starting — source: {file_path.name}")
 
     with SessionLocal() as session:
         db_run = _create_run(session, file_path.name)
@@ -238,15 +236,15 @@ def run(file_path: Path, event_id: uuid.UUID, event_key: str) -> PipelineResult:
         except Exception as exc:
             result.status = "failed"
             _finish_run(session, db_run, result)
-            logger.error(f"[Stage 1] Failed to read file: {exc}")
+            logger.error(f"[FB Stage 1] Failed to read file: {exc}")
             return result
 
-        logger.info(f"[Stage 1] Loaded {len(records)} records from file")
+        logger.info(f"[FB Stage 1] Loaded {len(records)} records from file")
         _process_records(session, db_run, records, result, event_id, event_key)
         _finish_run(session, db_run, result)
 
     logger.info(
-        f"[Stage 1] Done — total={result.total} "
+        f"[FB Stage 1] Done — total={result.total} "
         f"newly_added={result.newly_added} change_added={result.change_added} "
         f"skipped={result.skipped} errors={result.errors}"
     )
@@ -255,7 +253,7 @@ def run(file_path: Path, event_id: uuid.UUID, event_key: str) -> PipelineResult:
 
 def run_from_records(records: list[dict], source: str, event_id: uuid.UUID, event_key: str) -> PipelineResult:
     """Run Stage 1 from records returned by ApifyRunner (live run)."""
-    logger.info(f"[Stage 1] Starting — source: {source} ({len(records)} records)")
+    logger.info(f"[FB Stage 1] Starting — source: {source} ({len(records)} records)")
 
     with SessionLocal() as session:
         db_run = _create_run(session, source)
@@ -264,7 +262,7 @@ def run_from_records(records: list[dict], source: str, event_id: uuid.UUID, even
         _finish_run(session, db_run, result)
 
     logger.info(
-        f"[Stage 1] Done — total={result.total} "
+        f"[FB Stage 1] Done — total={result.total} "
         f"newly_added={result.newly_added} change_added={result.change_added} "
         f"skipped={result.skipped} errors={result.errors}"
     )

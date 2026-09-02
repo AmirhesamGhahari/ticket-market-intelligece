@@ -12,7 +12,7 @@ from loguru import logger
 from ticket_tracker.config import settings
 
 _MODEL_NAME = "gemini-3.1-flash-lite"
-_RATE_LIMIT_SLEEP = 8.0  
+_RATE_LIMIT_SLEEP = 8.0
 
 # ── System instruction ─────────────────────────────────────────────────────────
 # Passed as system_instruction to Gemini — separated from listing data so the

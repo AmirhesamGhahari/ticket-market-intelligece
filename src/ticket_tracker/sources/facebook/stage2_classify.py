@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from ticket_tracker.db.engine import SessionLocal
 from ticket_tracker.db.models.facebook_listing_classification import FacebookListingClassification
 from ticket_tracker.db.models.pipeline_tables import PipelineRun
-from ticket_tracker.pipeline.stage2_classify.gemini import classify_batch
+from ticket_tracker.sources.facebook.gemini import classify_batch
 
 BATCH_SIZE = 15
 
@@ -72,9 +72,8 @@ def run(event_id: Optional[uuid.UUID] = None, event_key: Optional[str] = None) -
     """Classify all unclassified current-version raw listings via Gemini.
 
     Pass event_id to restrict to one event, or omit to classify across all events.
-    event_key is used as a human-readable source label in the pipeline_runs record.
     Idempotent: records already in facebook_listing_classifications are skipped via NOT EXISTS.
-    Failed batches are logged and retried on the next run.
+    Failed batches are retried on the next run.
     """
     with SessionLocal() as session:
         db_run = _create_run(session, event_key)

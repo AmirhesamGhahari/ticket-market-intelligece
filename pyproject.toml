@@ -20,10 +20,12 @@ dependencies = [
     "apify-client>=1.7",
     "pyyaml>=6.0",
     "google-genai>=1.0",
+    "httpx>=0.27",
 ]
 
 [project.scripts]
-run-pipeline = "ticket_tracker.run_pipeline:cli"
+run-facebook = "ticket_tracker.sources.facebook.cli:cli"
+run-seatgeek = "ticket_tracker.sources.seatgeek.cli:cli"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/ticket_tracker"]

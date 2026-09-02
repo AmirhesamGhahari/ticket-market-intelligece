@@ -2,6 +2,7 @@ event_key: "nocturnal_wonderland_2026"
 event_name: "Nocturnal Wonderland Music Festival 2026"
 event_keyword: "nocturnal"
 apify_actor_id: "raidr-api/facebook-marketplace-scraper"
+seatgeek_event_id: null  # find at seatgeek.com — search Nocturnal Wonderland and grab the ID from the URL
 radius_km: "500"
 
 proxy:

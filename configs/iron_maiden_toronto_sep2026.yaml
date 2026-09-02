@@ -2,6 +2,11 @@ event_key: "iron_maiden_toronto_sep2026"
 event_name: "Iron Maiden Toronto Tour Sep 2026"
 event_keyword: "iron_maiden_toronto"
 apify_actor_id: "raidr-api/facebook-marketplace-scraper"
+
+# SeatGeek event ID — find it from the SeatGeek URL for this event:
+# e.g. seatgeek.com/iron-maiden-tickets/toronto-ontario-...-XXXXXXX-event
+# then set: seatgeek_event_id: XXXXXXX
+seatgeek_event_id: null
 radius_km: "250"
 
 proxy:

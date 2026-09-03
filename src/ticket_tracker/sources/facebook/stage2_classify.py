@@ -103,6 +103,7 @@ def run(event_id: Optional[uuid.UUID] = None, event_key: Optional[str] = None) -
                 rows = session.execute(_FETCH_ALL, fetch_params).fetchall()
 
             if not rows:
+                logger.warning(f"[Classify] No rows returned at offset {offset} (expected ~{total - offset} remaining) — stopping early")
                 break
 
             listings = [

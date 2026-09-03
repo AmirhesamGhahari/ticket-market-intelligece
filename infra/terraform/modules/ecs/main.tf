@@ -38,7 +38,9 @@ resource "aws_iam_role_policy" "execution_secrets" {
       Resource = [
         var.db_url_secret_arn,
         var.apify_token_secret_arn,
-        var.gemini_api_key_secret_arn
+        var.gemini_api_key_secret_arn,
+        var.seatgeek_client_id_secret_arn,
+        var.seatgeek_client_secret_secret_arn
       ]
     }]
   })
@@ -92,6 +94,14 @@ resource "aws_ecs_task_definition" "pipeline" {
       {
         name      = "GEMINI_API_KEY"
         valueFrom = var.gemini_api_key_secret_arn
+      },
+      {
+        name      = "SEATGEEK_CLIENT_ID"
+        valueFrom = var.seatgeek_client_id_secret_arn
+      },
+      {
+        name      = "SEATGEEK_CLIENT_SECRET"
+        valueFrom = var.seatgeek_client_secret_secret_arn
       }
     ]
 

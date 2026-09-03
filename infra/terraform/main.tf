@@ -20,25 +20,29 @@ module "aurora" {
 }
 
 module "secrets" {
-  source             = "./modules/secrets"
-  app_name           = var.app_name
-  apify_api_token    = var.apify_api_token
-  gemini_api_key     = var.gemini_api_key
-  db_master_username = var.db_master_username
-  db_master_password = var.db_master_password
-  aurora_endpoint    = module.aurora.cluster_endpoint
-  aurora_port        = module.aurora.cluster_port
-  db_name            = var.db_name
+  source                 = "./modules/secrets"
+  app_name               = var.app_name
+  apify_api_token        = var.apify_api_token
+  gemini_api_key         = var.gemini_api_key
+  seatgeek_client_id     = var.seatgeek_client_id
+  seatgeek_client_secret = var.seatgeek_client_secret
+  db_master_username     = var.db_master_username
+  db_master_password     = var.db_master_password
+  aurora_endpoint        = module.aurora.cluster_endpoint
+  aurora_port            = module.aurora.cluster_port
+  db_name                = var.db_name
 }
 
 module "ecs" {
-  source                    = "./modules/ecs"
-  app_name                  = var.app_name
-  region                    = var.region
-  ecr_repository_url        = module.ecr.repository_url
-  db_url_secret_arn         = module.secrets.db_url_secret_arn
-  apify_token_secret_arn    = module.secrets.apify_token_secret_arn
-  gemini_api_key_secret_arn = module.secrets.gemini_api_key_secret_arn
+  source                            = "./modules/ecs"
+  app_name                          = var.app_name
+  region                            = var.region
+  ecr_repository_url                = module.ecr.repository_url
+  db_url_secret_arn                 = module.secrets.db_url_secret_arn
+  apify_token_secret_arn            = module.secrets.apify_token_secret_arn
+  gemini_api_key_secret_arn         = module.secrets.gemini_api_key_secret_arn
+  seatgeek_client_id_secret_arn     = module.secrets.seatgeek_client_id_secret_arn
+  seatgeek_client_secret_secret_arn = module.secrets.seatgeek_client_secret_secret_arn
 }
 
 module "scheduler" {

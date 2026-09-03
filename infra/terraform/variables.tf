@@ -22,6 +22,18 @@ variable "gemini_api_key" {
   sensitive   = true
 }
 
+variable "seatgeek_client_id" {
+  description = "SeatGeek API client ID"
+  type        = string
+  sensitive   = true
+}
+
+variable "seatgeek_client_secret" {
+  description = "SeatGeek API client secret"
+  type        = string
+  sensitive   = true
+}
+
 variable "db_master_username" {
   description = "Aurora master username"
   type        = string

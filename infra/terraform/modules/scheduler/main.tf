@@ -103,21 +103,44 @@ resource "aws_iam_role_policy" "scheduler_invoke" {
   })
 }
 
-# EventBridge Scheduler — fires every 6 hours UTC
-resource "aws_scheduler_schedule" "periodic" {
-  name       = "${var.app_name}-periodic"
+# Facebook — every 12 hours, first run at 04:00 UTC (04:00, 16:00)
+# Disabled by default — enable manually in the AWS console when ready.
+resource "aws_scheduler_schedule" "facebook_periodic" {
+  name       = "${var.app_name}-facebook-periodic"
   group_name = "default"
+  state      = "DISABLED"
 
   flexible_time_window {
     mode = "OFF"
   }
 
-  schedule_expression          = "cron(0 */8 * * ? *)"
+  schedule_expression          = "cron(0 4/12 * * ? *)"
   schedule_expression_timezone = "UTC"
 
   target {
     arn      = aws_lambda_function.fanout.arn
     role_arn = aws_iam_role.scheduler.arn
-    input    = jsonencode({ mode = "periodic" })
+    input    = jsonencode({ mode = "periodic", command = "from-apify", stage = "all" })
+  }
+}
+
+# SeatGeek — every 8 hours, first run at 02:00 UTC (02:00, 10:00, 18:00)
+# Disabled by default — enable manually in the AWS console when ready.
+resource "aws_scheduler_schedule" "seatgeek_periodic" {
+  name       = "${var.app_name}-seatgeek-periodic"
+  group_name = "default"
+  state      = "DISABLED"
+
+  flexible_time_window {
+    mode = "OFF"
+  }
+
+  schedule_expression          = "cron(0 2/8 * * ? *)"
+  schedule_expression_timezone = "UTC"
+
+  target {
+    arn      = aws_lambda_function.fanout.arn
+    role_arn = aws_iam_role.scheduler.arn
+    input    = jsonencode({ mode = "periodic", command = "from-seatgeek" })
   }
 }

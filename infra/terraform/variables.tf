@@ -73,8 +73,12 @@ variable "github_branch" {
   default     = "main"
 }
 
-variable "event_configs" {
-  description = "List of event config names (YAML files in configs/) to run on each schedule"
+variable "facebook_event_configs" {
+  description = "List of event config names (YAML files in configs/) the Facebook (from-apify) schedule runs"
   type        = list(string)
-  # default     = ["veld_2026", "electric_island_sep2026", "nocturnal_wonderland_2026", "osheaga_2026"]
+}
+
+variable "seatgeek_event_configs" {
+  description = "List of event config names (YAML files in configs/) the SeatGeek (from-seatgeek) schedule runs"
+  type        = list(string)
 }

@@ -22,7 +22,11 @@ variable "ecs_task_sg_id" {
   type = string
 }
 
-variable "event_configs" {
+variable "facebook_event_configs" {
+  type = list(string)
+}
+
+variable "seatgeek_event_configs" {
   type = list(string)
 }
 

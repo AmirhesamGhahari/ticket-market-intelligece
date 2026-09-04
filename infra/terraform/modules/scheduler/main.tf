@@ -66,11 +66,12 @@ resource "aws_lambda_function" "fanout" {
 
   environment {
     variables = {
-      ECS_CLUSTER_ARN       = var.ecs_cluster_arn
-      TASK_DEFINITION_FAMILY = var.task_family
-      SUBNET_IDS             = join(",", var.public_subnet_ids)
-      SECURITY_GROUP_ID      = var.ecs_task_sg_id
-      EVENT_CONFIGS          = jsonencode(var.event_configs)
+      ECS_CLUSTER_ARN         = var.ecs_cluster_arn
+      TASK_DEFINITION_FAMILY  = var.task_family
+      SUBNET_IDS              = join(",", var.public_subnet_ids)
+      SECURITY_GROUP_ID       = var.ecs_task_sg_id
+      FACEBOOK_EVENT_CONFIGS  = jsonencode(var.facebook_event_configs)
+      SEATGEEK_EVENT_CONFIGS  = jsonencode(var.seatgeek_event_configs)
     }
   }
 }

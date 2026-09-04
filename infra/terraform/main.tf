@@ -53,7 +53,8 @@ module "scheduler" {
   task_role_arn       = module.ecs.task_role_arn
   public_subnet_ids   = module.networking.public_subnet_ids
   ecs_task_sg_id      = module.networking.ecs_task_sg_id
-  event_configs       = var.event_configs
+  facebook_event_configs = var.facebook_event_configs
+  seatgeek_event_configs = var.seatgeek_event_configs
   lambda_source_dir   = "${path.module}/../lambda/fanout"
   task_family         = "${var.app_name}-pipeline"
 }

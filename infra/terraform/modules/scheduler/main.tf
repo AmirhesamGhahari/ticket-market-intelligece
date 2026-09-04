@@ -109,7 +109,7 @@ resource "aws_iam_role_policy" "scheduler_invoke" {
 resource "aws_scheduler_schedule" "facebook_periodic" {
   name       = "${var.app_name}-facebook-periodic"
   group_name = "default"
-  state      = "DISABLED"
+  #state      = "DISABLED"
 
   flexible_time_window {
     mode = "OFF"
@@ -130,7 +130,7 @@ resource "aws_scheduler_schedule" "facebook_periodic" {
 resource "aws_scheduler_schedule" "seatgeek_periodic" {
   name       = "${var.app_name}-seatgeek-periodic"
   group_name = "default"
-  state      = "DISABLED"
+  #state      = "DISABLED"
 
   flexible_time_window {
     mode = "OFF"

@@ -8,38 +8,25 @@ from loguru import logger
 
 
 class SeatGeekClient:
+    """SeatGeek public API client.
+
+    Note: SeatGeek's public API does not expose individual ticket listings
+    (section/row/price/quantity) — per their own docs, there are no plans to.
+    The only pricing signal available is the aggregate `stats` object on an
+    event (lowest/highest/average price, listing count).
+    """
+
     _BASE = "https://api.seatgeek.com/2"
-    _PER_PAGE = 100
     _RETRY_DELAY = 15.0  # seconds to wait on 429
 
     def __init__(self, client_id: str) -> None:
         self._client_id = client_id
         self._http = httpx.Client(timeout=30)
 
-    def get_listings(self, sg_event_id: int) -> list[dict[str, Any]]:
-        """Fetch all current ticket listings for a SeatGeek event, paginating automatically."""
-        logger.info(f"[SeatGeek] Fetching listings for event {sg_event_id}")
-        listings: list[dict] = []
-        page = 1
-
-        while True:
-            data = self._get(
-                "/listings",
-                params={"event_id": sg_event_id, "per_page": self._PER_PAGE, "page": page},
-            )
-            batch = data.get("listings") or []
-            listings.extend(batch)
-
-            meta = data.get("meta") or {}
-            total_pages = meta.get("pages") or 1
-            logger.debug(f"[SeatGeek] Page {page}/{total_pages} — {len(batch)} listings")
-
-            if page >= total_pages or not batch:
-                break
-            page += 1
-
-        logger.info(f"[SeatGeek] Done — {len(listings)} listings for event {sg_event_id}")
-        return listings
+    def get_event(self, sg_event_id: int) -> dict[str, Any]:
+        """Fetch a single event, including its aggregate price `stats` object."""
+        logger.info(f"[SeatGeek] Fetching event {sg_event_id}")
+        return self._get(f"/events/{sg_event_id}")
 
     def search_events(self, query: str, city: str | None = None) -> list[dict[str, Any]]:
         """Search for events by name — useful for finding a SeatGeek event ID."""

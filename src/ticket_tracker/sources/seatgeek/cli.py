@@ -23,7 +23,7 @@ from sqlalchemy import text
 from ticket_tracker.config import settings
 from ticket_tracker.db.engine import SessionLocal
 from ticket_tracker.sources.seatgeek.scraper import SeatGeekClient
-from ticket_tracker.sources.seatgeek.stage1 import run_from_records
+from ticket_tracker.sources.seatgeek.stage1 import run_snapshot
 
 console = Console()
 
@@ -85,10 +85,7 @@ def _print_result(title: str, result, elapsed: float) -> None:
     table.add_column()
     table.add_row("Run ID", str(result.run_id))
     table.add_row("Status", result.status)
-    table.add_row("Total records", str(result.total))
-    table.add_row("[green]✓ Newly added[/green]", f"[green]{result.newly_added}[/green]")
-    table.add_row("[cyan]~ Changed version[/cyan]", f"[cyan]{result.change_added}[/cyan]")
-    table.add_row("[dim]– Skipped[/dim]", f"[dim]{result.skipped}[/dim]")
+    table.add_row("[green]✓ Snapshot recorded[/green]", f"[green]{result.fetched}[/green]")
     table.add_row("[red]✗ Errors[/red]", f"[red]{result.errors}[/red]")
     console.print(table)
     console.print(f"  [dim]Elapsed: {elapsed:.1f}s[/dim]")
@@ -113,10 +110,15 @@ def cli() -> None:
     "--mode", "-m",
     type=click.Choice(["initial", "periodic"], case_sensitive=False),
     default="periodic", show_default=True,
-    help="initial or periodic — both fetch all active listings from SeatGeek.",
+    help="initial or periodic — both fetch the same aggregate price stats from SeatGeek.",
 )
 def from_api(config_name: str, mode: str) -> None:
-    """Fetch ticket listings from SeatGeek for the event in the config."""
+    """Fetch aggregate price stats from SeatGeek for the event in the config.
+
+    SeatGeek's public API does not expose individual ticket listings — only an
+    aggregate stats object (lowest/highest/average price, listing count) per
+    event. This command appends one price-trend snapshot per run.
+    """
     console.print()
     total_start = time.monotonic()
 
@@ -138,18 +140,18 @@ def from_api(config_name: str, mode: str) -> None:
     event_id = _resolve_event(config)
 
     client = SeatGeekClient(settings.seatgeek_client_id)
-    records = client.get_listings(int(sg_event_id))
+    event_data = client.get_event(int(sg_event_id))
 
     source_label = f"{config_name}:seatgeek:{mode}"
     t0 = time.monotonic()
-    result = run_from_records(
-        records,
+    result = run_snapshot(
+        event_data,
         source=source_label,
         event_id=event_id,
         event_key=config["event_key"],
         sg_event_id=int(sg_event_id),
     )
-    _print_result("STAGE 1 — SeatGeek Fetch & Extract", result, time.monotonic() - t0)
+    _print_result("STAGE 1 — SeatGeek Price Snapshot", result, time.monotonic() - t0)
 
     console.print(Rule(f"[dim]Done in {time.monotonic() - total_start:.1f}s[/dim]"))
     console.print()

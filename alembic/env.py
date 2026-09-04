@@ -10,7 +10,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from ticket_tracker.config import settings
 from ticket_tracker.db.base import Base
-from ticket_tracker.db.models import pipeline_tables, event, facebook_listing_raw, facebook_listing_classification, seatgeek_listing_raw  
+from ticket_tracker.db.models import pipeline_tables, event, facebook_listing_raw, facebook_listing_classification, seatgeek_event_stats  # noqa: F401 — registers models with Base.metadata
+
 config = context.config
 
 # Override the placeholder URL in alembic.ini with the real one from .env.

@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+import time
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Optional
 
 from loguru import logger
-from sqlalchemy import text
+from sqlalchemy import bindparam, text
 from sqlalchemy.orm import Session
 
 from ticket_tracker.db.engine import SessionLocal
@@ -15,6 +16,8 @@ from ticket_tracker.db.models.pipeline_tables import PipelineRun
 from ticket_tracker.sources.facebook.gemini import classify_batch
 
 BATCH_SIZE = 15
+MAX_RETRIES = 3
+RETRY_BACKOFF_SECONDS = 5
 
 _COUNT_ALL = text("""
     SELECT COUNT(*) FROM facebook_listing_raw
@@ -42,9 +45,10 @@ _FETCH_ALL = text("""
           SELECT 1 FROM facebook_listing_classifications
           WHERE raw_listing_id = facebook_listing_raw.id
       )
+      AND id NOT IN :exclude_ids
     ORDER BY id
-    LIMIT :limit OFFSET :offset
-""")
+    LIMIT :limit
+""").bindparams(bindparam("exclude_ids", expanding=True))
 
 _FETCH_EVENT = text("""
     SELECT id, title, description, price FROM facebook_listing_raw
@@ -54,9 +58,10 @@ _FETCH_EVENT = text("""
           SELECT 1 FROM facebook_listing_classifications
           WHERE raw_listing_id = facebook_listing_raw.id
       )
+      AND id NOT IN :exclude_ids
     ORDER BY id
-    LIMIT :limit OFFSET :offset
-""")
+    LIMIT :limit
+""").bindparams(bindparam("exclude_ids", expanding=True))
 
 
 @dataclass
@@ -93,9 +98,9 @@ def run(event_id: Optional[uuid.UUID] = None, event_key: Optional[str] = None) -
 
         logger.info(f"[Classify] {total} listings to classify in batches of {BATCH_SIZE}")
 
-        offset = 0
-        while offset < total:
-            fetch_params: dict = {"limit": BATCH_SIZE, "offset": offset}
+        exclude_ids: list = []
+        while True:
+            fetch_params: dict = {"limit": BATCH_SIZE, "exclude_ids": exclude_ids}
             if event_id:
                 fetch_params["event_id"] = str(event_id)
                 rows = session.execute(_FETCH_EVENT, fetch_params).fetchall()
@@ -103,7 +108,6 @@ def run(event_id: Optional[uuid.UUID] = None, event_key: Optional[str] = None) -
                 rows = session.execute(_FETCH_ALL, fetch_params).fetchall()
 
             if not rows:
-                logger.warning(f"[Classify] No rows returned at offset {offset} (expected ~{total - offset} remaining) — stopping early")
                 break
 
             listings = [
@@ -116,40 +120,48 @@ def run(event_id: Optional[uuid.UUID] = None, event_key: Optional[str] = None) -
                 for row in rows
             ]
 
-            try:
-                classifications = classify_batch(listings)
-                for row, clf in zip(rows, classifications):
-                    session.add(FacebookListingClassification(
-                        raw_listing_id=row.id,
-                        llm_model="gemini-3.1-flash-lite",
-                        is_ticket=bool(clf.get("is_ticket", False)),
-                        is_buyer_listing=bool(clf.get("is_buyer_listing", False)),
-                        is_merch=bool(clf.get("is_merch", False)),
-                        is_wrong_category=bool(clf.get("is_wrong_category", False)),
-                        extracted_event=clf.get("extracted_event"),
-                        extracted_price=clf.get("extracted_price"),
-                        face_value_price=clf.get("face_value_price"),
-                        face_value_mentioned=bool(clf.get("face_value_mentioned", False)),
-                        quantity=clf.get("quantity"),
-                        ticket_type=clf.get("ticket_type"),
-                        event_days=clf.get("event_days"),
-                        price_negotiable=bool(clf.get("price_negotiable", False)),
-                        includes_extras=clf.get("includes_extras"),
-                        seller_note=clf.get("seller_note"),
-                        confidence=clf.get("confidence", "low"),
-                        reason=clf.get("reason"),
-                        raw_llm_response=clf,
-                    ))
-                session.commit()
-                result.classified += len(rows)
-                logger.info(f"[Classify] {result.classified}/{total} classified")
+            success = False
+            for attempt in range(1, MAX_RETRIES + 1):
+                try:
+                    classifications = classify_batch(listings)
+                    for row, clf in zip(rows, classifications):
+                        session.add(FacebookListingClassification(
+                            raw_listing_id=row.id,
+                            llm_model="gemini-3.1-flash-lite",
+                            is_ticket=bool(clf.get("is_ticket", False)),
+                            is_buyer_listing=bool(clf.get("is_buyer_listing", False)),
+                            is_merch=bool(clf.get("is_merch", False)),
+                            is_wrong_category=bool(clf.get("is_wrong_category", False)),
+                            extracted_event=clf.get("extracted_event"),
+                            extracted_price=clf.get("extracted_price"),
+                            face_value_price=clf.get("face_value_price"),
+                            face_value_mentioned=bool(clf.get("face_value_mentioned", False)),
+                            quantity=clf.get("quantity"),
+                            ticket_type=clf.get("ticket_type"),
+                            event_days=clf.get("event_days"),
+                            price_negotiable=bool(clf.get("price_negotiable", False)),
+                            includes_extras=clf.get("includes_extras"),
+                            seller_note=clf.get("seller_note"),
+                            confidence=clf.get("confidence", "low"),
+                            reason=clf.get("reason"),
+                            raw_llm_response=clf,
+                        ))
+                    session.commit()
+                    result.classified += len(rows)
+                    logger.info(f"[Classify] {result.classified}/{total} classified")
+                    success = True
+                    break
 
-            except Exception as exc:
-                logger.error(f"[Classify] Batch at offset {offset} failed: {exc}")
+                except Exception as exc:
+                    session.rollback()
+                    logger.warning(f"[Classify] Batch attempt {attempt}/{MAX_RETRIES} failed: {exc}")
+                    if attempt < MAX_RETRIES:
+                        time.sleep(RETRY_BACKOFF_SECONDS * attempt)
+
+            if not success:
+                logger.error(f"[Classify] Batch permanently failed after {MAX_RETRIES} attempts — skipping {len(rows)} rows this run")
                 result.errors += len(rows)
-                session.rollback()
-
-            offset += BATCH_SIZE
+                exclude_ids.extend(row.id for row in rows)
 
         result.status = "completed" if result.errors == 0 else "partial"
         _finish_run(session, db_run, result)

@@ -1,0 +1,47 @@
+event_key: "ac/dc_montreal_sep2026"
+event_name: "AC/DC Montreal Tour Sep 2026"
+event_keyword: "ac/dc_montreal"
+apify_actor_id: "raidr-api/facebook-marketplace-scraper"
+seatgeek_event_id: null  # find at seatgeek.com — search Iron Maiden Montreal and grab the ID from the URL
+radius_km: "250"
+
+proxy:
+  use_apify_proxy: true
+  apify_proxy_groups: ["RESIDENTIAL"]
+  apify_proxy_country: "CA"
+
+# ── Search terms ───────────────────────────────────────────────────────────────
+# Shared across all cities and both run modes.
+# Apify advanced mode caps at 50 searches per actor run — trim if you exceed that.
+
+search_terms:
+  - "ac/dc"
+  - "ac/dc tour"
+  - "ac/dc sep"
+  - "ac/dc ticket"
+
+# ── Initial run ────────────────────────────────────────────────────────────────
+# Run once to capture the full available history (~30-day FB window).
+# No date filter, no Apify-level dedup — get everything.
+# One actor run is made per city.
+
+initial_run:
+  cities:
+    - "Montreal, Quebec"
+  use_deduplication: false
+  fetch_detailed_items: false
+  listings_per_search: 400
+  filter_keywords: "ac/dc"
+
+# ── Periodic run ───────────────────────────────────────────────────────────────
+# Run every 6 hours. Apify dedup skips listings seen in prior runs.
+# days_listed="1" keeps each search fast and cheap.
+
+periodic_run:
+  cities:
+    - "Montreal, Quebec"
+  use_deduplication: false
+  fetch_detailed_items: false
+  listings_per_search: 100
+  days_listed: "30"
+  filter_keywords: "ac/dc"

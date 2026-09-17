@@ -28,9 +28,13 @@ Thumbs.db
 
 # Data
 sample_data/
+html_data/
 
 #Claude
 .claude/
+
+#documentation
+documentation?
 
 # Terraform
 infra/terraform/.terraform/

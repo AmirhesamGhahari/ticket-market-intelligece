@@ -11,39 +11,39 @@ from sqlalchemy import bindparam, text
 from sqlalchemy.orm import Session
 
 from ticket_tracker.db.engine import SessionLocal
-from ticket_tracker.db.models.facebook_listing_classification import FacebookListingClassification
+from ticket_tracker.db.models.facebook_listings_legacy_classified import FacebookListingsLegacyClassified
 from ticket_tracker.db.models.pipeline_tables import PipelineRun
-from ticket_tracker.sources.facebook.gemini import classify_batch
+from ticket_tracker.sources.facebook_legacy.gemini import classify_batch
 
 BATCH_SIZE = 15
 MAX_RETRIES = 3
 RETRY_BACKOFF_SECONDS = 5
 
 _COUNT_ALL = text("""
-    SELECT COUNT(*) FROM facebook_listing_raw
+    SELECT COUNT(*) FROM facebook.facebook_listings_legacy_raw
     WHERE valid_to IS NULL
       AND NOT EXISTS (
-          SELECT 1 FROM facebook_listing_classifications
-          WHERE raw_listing_id = facebook_listing_raw.id
+          SELECT 1 FROM facebook.facebook_listings_legacy_classified
+          WHERE raw_listing_id = facebook.facebook_listings_legacy_raw.id
       )
 """)
 
 _COUNT_EVENT = text("""
-    SELECT COUNT(*) FROM facebook_listing_raw
+    SELECT COUNT(*) FROM facebook.facebook_listings_legacy_raw
     WHERE valid_to IS NULL
       AND event_id = :event_id
       AND NOT EXISTS (
-          SELECT 1 FROM facebook_listing_classifications
-          WHERE raw_listing_id = facebook_listing_raw.id
+          SELECT 1 FROM facebook.facebook_listings_legacy_classified
+          WHERE raw_listing_id = facebook.facebook_listings_legacy_raw.id
       )
 """)
 
 _FETCH_ALL = text("""
-    SELECT id, title, description, price FROM facebook_listing_raw
+    SELECT id, title, description, price FROM facebook.facebook_listings_legacy_raw
     WHERE valid_to IS NULL
       AND NOT EXISTS (
-          SELECT 1 FROM facebook_listing_classifications
-          WHERE raw_listing_id = facebook_listing_raw.id
+          SELECT 1 FROM facebook.facebook_listings_legacy_classified
+          WHERE raw_listing_id = facebook.facebook_listings_legacy_raw.id
       )
       AND id NOT IN :exclude_ids
     ORDER BY id
@@ -51,12 +51,12 @@ _FETCH_ALL = text("""
 """).bindparams(bindparam("exclude_ids", expanding=True))
 
 _FETCH_EVENT = text("""
-    SELECT id, title, description, price FROM facebook_listing_raw
+    SELECT id, title, description, price FROM facebook.facebook_listings_legacy_raw
     WHERE valid_to IS NULL
       AND event_id = :event_id
       AND NOT EXISTS (
-          SELECT 1 FROM facebook_listing_classifications
-          WHERE raw_listing_id = facebook_listing_raw.id
+          SELECT 1 FROM facebook.facebook_listings_legacy_classified
+          WHERE raw_listing_id = facebook.facebook_listings_legacy_raw.id
       )
       AND id NOT IN :exclude_ids
     ORDER BY id
@@ -77,7 +77,7 @@ def run(event_id: Optional[uuid.UUID] = None, event_key: Optional[str] = None) -
     """Classify all unclassified current-version raw listings via Gemini.
 
     Pass event_id to restrict to one event, or omit to classify across all events.
-    Idempotent: records already in facebook_listing_classifications are skipped via NOT EXISTS.
+    Idempotent: records already in facebook.facebook_listings_legacy_classified are skipped via NOT EXISTS.
     Failed batches are retried on the next run.
     """
     with SessionLocal() as session:
@@ -125,7 +125,7 @@ def run(event_id: Optional[uuid.UUID] = None, event_key: Optional[str] = None) -
                 try:
                     classifications = classify_batch(listings)
                     for row, clf in zip(rows, classifications):
-                        session.add(FacebookListingClassification(
+                        session.add(FacebookListingsLegacyClassified(
                             raw_listing_id=row.id,
                             llm_model="gemini-3.1-flash-lite",
                             is_ticket=bool(clf.get("is_ticket", False)),

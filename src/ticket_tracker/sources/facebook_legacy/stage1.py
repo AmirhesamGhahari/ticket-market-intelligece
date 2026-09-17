@@ -1,6 +1,6 @@
 """Facebook Marketplace — Stage 1 extract pipeline.
 
-Reads Apify raider-api records and loads them into facebook_listing_raw
+Reads Apify raider-api records and loads them into facebook.facebook_listings_legacy_raw
 using CDC (Change Data Capture) keyed on (event_id, fb_listing_id).
 
 CDC rules per listing:
@@ -83,7 +83,7 @@ def _load_current_state(session: Session, event_id: uuid.UUID) -> dict[str, dict
     rows = session.execute(
         text("""
             SELECT fb_listing_id, price, is_sold, title, location_city, location_state
-            FROM facebook_listing_raw
+            FROM facebook.facebook_listings_legacy_raw
             WHERE event_id = :event_id AND valid_to IS NULL
         """),
         {"event_id": str(event_id)},
@@ -102,7 +102,7 @@ def _has_changed(existing: dict, params: dict) -> bool:
 
 
 _INSERT_SQL = text("""
-    INSERT INTO facebook_listing_raw (
+    INSERT INTO facebook.facebook_listings_legacy_raw (
         event_id, event_key, pipeline_run_id, fb_listing_id, listing_url, seller_profile_id,
         title, description, price, currency,
         location_city, location_state,
@@ -118,7 +118,7 @@ _INSERT_SQL = text("""
 """)
 
 _CLOSE_CURRENT_SQL = text("""
-    UPDATE facebook_listing_raw
+    UPDATE facebook.facebook_listings_legacy_raw
     SET valid_to = now()
     WHERE event_id = :event_id AND fb_listing_id = :fb_listing_id AND valid_to IS NULL
 """)

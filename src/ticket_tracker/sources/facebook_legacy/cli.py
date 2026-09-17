@@ -26,10 +26,10 @@ from sqlalchemy import text
 
 from ticket_tracker.config import settings
 from ticket_tracker.db.engine import SessionLocal
-from ticket_tracker.sources.facebook.scraper import ApifyRunner
-from ticket_tracker.sources.facebook.stage1 import run as run_stage1
-from ticket_tracker.sources.facebook.stage1 import run_from_records as run_stage1_from_records
-from ticket_tracker.sources.facebook.stage2_classify import run as run_classify
+from ticket_tracker.sources.facebook_legacy.scraper import ApifyRunner
+from ticket_tracker.sources.facebook_legacy.stage1 import run as run_stage1
+from ticket_tracker.sources.facebook_legacy.stage1 import run_from_records as run_stage1_from_records
+from ticket_tracker.sources.facebook_legacy.stage2_classify import run as run_classify
 
 console = Console()
 

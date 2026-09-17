@@ -10,7 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from ticket_tracker.config import settings
 from ticket_tracker.db.base import Base
-from ticket_tracker.db.models import pipeline_tables, event, facebook_listing_raw, facebook_listing_classification, seatgeek_event_stats  # noqa: F401 — registers models with Base.metadata
+from ticket_tracker.db.models import pipeline_tables, event, facebook_listings_legacy_raw, facebook_listings_legacy_classified, seatgeek_event_stats, facebook_listings_new_raw, facebook_listings_new_classified, stubhub_listing_raw  # noqa: F401 — registers models with Base.metadata
 
 config = context.config
 
@@ -22,6 +22,15 @@ if config.config_file_name is not None:
 
 target_metadata = Base.metadata
 
+_TRACKED_SCHEMAS = {None, "public", "facebook", "stubhub"}
+
+
+def _include_name(name, type_, parent_names):
+    """Tell autogenerate which schemas to scan for non-public schema support."""
+    if type_ == "schema":
+        return name in _TRACKED_SCHEMAS
+    return True
+
 
 def run_migrations_offline() -> None:
     url = config.get_main_option("sqlalchemy.url")
@@ -30,6 +39,8 @@ def run_migrations_offline() -> None:
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
+        include_schemas=True,
+        include_name=_include_name,
     )
     with context.begin_transaction():
         context.run_migrations()
@@ -42,7 +53,12 @@ def run_migrations_online() -> None:
         poolclass=pool.NullPool,
     )
     with connectable.connect() as connection:
-        context.configure(connection=connection, target_metadata=target_metadata)
+        context.configure(
+            connection=connection,
+            target_metadata=target_metadata,
+            include_schemas=True,
+            include_name=_include_name,
+        )
         with context.begin_transaction():
             context.run_migrations()
 

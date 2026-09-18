@@ -1,0 +1,206 @@
+"""Facebook Marketplace (futurafree actor) — Stage 2 LLM classification.
+
+Reads unclassified current-version rows from facebook.facebook_listings_new_raw,
+sends them to Gemini in batches, and inserts results into
+facebook.facebook_listings_new_classified.
+
+Idempotent: rows already in facebook.facebook_listings_new_classified are skipped
+via NOT EXISTS. Failed batches are retried on the next run.
+"""
+from __future__ import annotations
+
+import time
+import uuid
+from dataclasses import dataclass
+from datetime import datetime, timezone
+from typing import Optional
+
+from loguru import logger
+from sqlalchemy import bindparam, text
+from sqlalchemy.orm import Session
+
+from ticket_tracker.db.engine import SessionLocal
+from ticket_tracker.db.models.facebook_listings_new_classified import FacebookListingsNewClassified
+from ticket_tracker.db.models.pipeline_tables import PipelineRun
+from ticket_tracker.sources.facebook_legacy.gemini import classify_batch
+
+BATCH_SIZE = 15
+MAX_RETRIES = 3
+RETRY_BACKOFF_SECONDS = 5
+
+_COUNT_ALL = text("""
+    SELECT COUNT(*) FROM facebook.facebook_listings_new_raw
+    WHERE valid_to IS NULL
+      AND NOT EXISTS (
+          SELECT 1 FROM facebook.facebook_listings_new_classified
+          WHERE raw_listing_id = facebook.facebook_listings_new_raw.id
+      )
+""")
+
+_COUNT_EVENT = text("""
+    SELECT COUNT(*) FROM facebook.facebook_listings_new_raw
+    WHERE valid_to IS NULL
+      AND event_id = :event_id
+      AND NOT EXISTS (
+          SELECT 1 FROM facebook.facebook_listings_new_classified
+          WHERE raw_listing_id = facebook.facebook_listings_new_raw.id
+      )
+""")
+
+_FETCH_ALL = text("""
+    SELECT id, title, description, price FROM facebook.facebook_listings_new_raw
+    WHERE valid_to IS NULL
+      AND NOT EXISTS (
+          SELECT 1 FROM facebook.facebook_listings_new_classified
+          WHERE raw_listing_id = facebook.facebook_listings_new_raw.id
+      )
+      AND id NOT IN :exclude_ids
+    ORDER BY id
+    LIMIT :limit
+""").bindparams(bindparam("exclude_ids", expanding=True))
+
+_FETCH_EVENT = text("""
+    SELECT id, title, description, price FROM facebook.facebook_listings_new_raw
+    WHERE valid_to IS NULL
+      AND event_id = :event_id
+      AND NOT EXISTS (
+          SELECT 1 FROM facebook.facebook_listings_new_classified
+          WHERE raw_listing_id = facebook.facebook_listings_new_raw.id
+      )
+      AND id NOT IN :exclude_ids
+    ORDER BY id
+    LIMIT :limit
+""").bindparams(bindparam("exclude_ids", expanding=True))
+
+
+@dataclass
+class ClassifyResult:
+    run_id: uuid.UUID
+    status: str
+    total: int = 0
+    classified: int = 0
+    errors: int = 0
+
+
+def run(event_id: Optional[uuid.UUID] = None, event_key: Optional[str] = None) -> ClassifyResult:
+    """Classify all unclassified current-version rows via Gemini.
+
+    Pass event_id to restrict to one event, or omit to classify across all events.
+    """
+    with SessionLocal() as session:
+        db_run = _create_run(session, event_key)
+        result = ClassifyResult(run_id=db_run.id, status="completed")
+
+        if event_id:
+            total = session.execute(_COUNT_EVENT, {"event_id": str(event_id)}).scalar() or 0
+        else:
+            total = session.execute(_COUNT_ALL).scalar() or 0
+
+        result.total = total
+
+        if total == 0:
+            logger.info("[FB-New Classify] No unclassified listings — nothing to do")
+            _finish_run(session, db_run, result)
+            return result
+
+        logger.info(f"[FB-New Classify] {total} listings to classify in batches of {BATCH_SIZE}")
+
+        exclude_ids: list = []
+        while True:
+            fetch_params: dict = {"limit": BATCH_SIZE, "exclude_ids": exclude_ids}
+            if event_id:
+                fetch_params["event_id"] = str(event_id)
+                rows = session.execute(_FETCH_EVENT, fetch_params).fetchall()
+            else:
+                rows = session.execute(_FETCH_ALL, fetch_params).fetchall()
+
+            if not rows:
+                break
+
+            listings = [
+                {
+                    "id": row.id,
+                    "title": row.title,
+                    "description": row.description,
+                    "price": float(row.price) if row.price is not None else None,
+                }
+                for row in rows
+            ]
+
+            success = False
+            for attempt in range(1, MAX_RETRIES + 1):
+                try:
+                    classifications = classify_batch(listings)
+                    for row, clf in zip(rows, classifications):
+                        session.add(FacebookListingsNewClassified(
+                            raw_listing_id=row.id,
+                            llm_model="gemini-3.1-flash-lite",
+                            is_ticket=bool(clf.get("is_ticket", False)),
+                            is_buyer_listing=bool(clf.get("is_buyer_listing", False)),
+                            is_merch=bool(clf.get("is_merch", False)),
+                            is_wrong_category=bool(clf.get("is_wrong_category", False)),
+                            extracted_event=clf.get("extracted_event"),
+                            extracted_price=clf.get("extracted_price"),
+                            face_value_price=clf.get("face_value_price"),
+                            face_value_mentioned=bool(clf.get("face_value_mentioned", False)),
+                            quantity=clf.get("quantity"),
+                            ticket_type=clf.get("ticket_type"),
+                            event_days=clf.get("event_days"),
+                            price_negotiable=bool(clf.get("price_negotiable", False)),
+                            includes_extras=clf.get("includes_extras"),
+                            seller_note=clf.get("seller_note"),
+                            confidence=clf.get("confidence", "low"),
+                            reason=clf.get("reason"),
+                            raw_llm_response=clf,
+                        ))
+                    session.commit()
+                    result.classified += len(rows)
+                    logger.info(f"[FB-New Classify] {result.classified}/{total} classified")
+                    success = True
+                    break
+
+                except Exception as exc:
+                    session.rollback()
+                    logger.warning(
+                        f"[FB-New Classify] Batch attempt {attempt}/{MAX_RETRIES} failed: {exc}"
+                    )
+                    if attempt < MAX_RETRIES:
+                        time.sleep(RETRY_BACKOFF_SECONDS * attempt)
+
+            if not success:
+                logger.error(
+                    f"[FB-New Classify] Batch permanently failed after {MAX_RETRIES} attempts "
+                    f"— skipping {len(rows)} rows this run"
+                )
+                result.errors += len(rows)
+                exclude_ids.extend(row.id for row in rows)
+
+        result.status = "completed" if result.errors == 0 else "partial"
+        _finish_run(session, db_run, result)
+
+    logger.info(
+        f"[FB-New Classify] Done — total={result.total} "
+        f"classified={result.classified} errors={result.errors}"
+    )
+    return result
+
+
+def _create_run(session: Session, event_key: Optional[str]) -> PipelineRun:
+    run = PipelineRun(
+        stage="stage2_facebook_new",
+        source=event_key if event_key else "all",
+        status="running",
+    )
+    session.add(run)
+    session.commit()
+    session.refresh(run)
+    return run
+
+
+def _finish_run(session: Session, run: PipelineRun, result: ClassifyResult) -> None:
+    run.status = result.status
+    run.finished_at = datetime.now(timezone.utc)
+    run.total_records = result.total
+    run.newly_added_count = result.classified
+    run.error_count = result.errors
+    session.commit()

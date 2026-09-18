@@ -24,8 +24,10 @@ dependencies = [
 ]
 
 [project.scripts]
-run-facebook = "ticket_tracker.sources.facebook.cli:cli"
+run-facebook-legacy = "ticket_tracker.sources.facebook_legacy.cli:cli"
 run-seatgeek = "ticket_tracker.sources.seatgeek.cli:cli"
+run-facebook-new = "ticket_tracker.sources.facebook_new.cli:cli"
+run-stubhub = "ticket_tracker.sources.stubhub.cli:cli"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/ticket_tracker"]

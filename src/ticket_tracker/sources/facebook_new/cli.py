@@ -1,8 +1,11 @@
 """Facebook Marketplace (futurafree actor) pipeline CLI.
 
 Commands:
-    run-facebook-marketplace from-config --config olivia_rodrigo_toronto_oct2026 --mode initial
-    run-facebook-marketplace from-config --config olivia_rodrigo_toronto_oct2026 --mode periodic
+    run-facebook-new from-config --config olivia_rodrigo_toronto_oct2026 --mode initial
+    run-facebook-new from-config --config olivia_rodrigo_toronto_oct2026 --mode periodic
+    run-facebook-new from-config --config olivia_rodrigo_toronto_oct2026 --mode periodic --stage classify
+    run-facebook-new classify
+    run-facebook-new classify --config olivia_rodrigo_toronto_oct2026
 """
 from __future__ import annotations
 
@@ -10,6 +13,7 @@ import sys
 import time
 import uuid
 from pathlib import Path
+from typing import Optional
 
 import click
 import yaml
@@ -23,6 +27,7 @@ from ticket_tracker.config import settings
 from ticket_tracker.db.engine import SessionLocal
 from ticket_tracker.sources.facebook_new.scraper import FuturafreeRunner, build_run_input
 from ticket_tracker.sources.facebook_new.stage1 import run_from_records, PipelineResult
+from ticket_tracker.sources.facebook_new.stage2_classify import run as run_classify, ClassifyResult
 
 console = Console()
 logger.remove()
@@ -70,7 +75,7 @@ def _resolve_event(config: dict) -> uuid.UUID:
     return event_id
 
 
-def _print_result(title: str, result: PipelineResult, elapsed: float) -> None:
+def _print_scrape_result(title: str, result: PipelineResult, elapsed: float) -> None:
     console.print(Rule(f"[bold cyan]{title}[/bold cyan]"))
     table = Table(show_header=False, box=None, padding=(0, 2))
     table.add_column(style="dim", width=26)
@@ -81,6 +86,21 @@ def _print_result(title: str, result: PipelineResult, elapsed: float) -> None:
     table.add_row("[green]✓ Newly added[/green]", f"[green]{result.newly_added}[/green]")
     table.add_row("[cyan]~ Changed version[/cyan]", f"[cyan]{result.change_added}[/cyan]")
     table.add_row("[dim]– Skipped[/dim]", f"[dim]{result.skipped}[/dim]")
+    table.add_row("[red]✗ Errors[/red]", f"[red]{result.errors}[/red]")
+    console.print(table)
+    console.print(f"  [dim]Elapsed: {elapsed:.1f}s[/dim]")
+    console.print()
+
+
+def _print_classify_result(title: str, result: ClassifyResult, elapsed: float) -> None:
+    console.print(Rule(f"[bold cyan]{title}[/bold cyan]"))
+    table = Table(show_header=False, box=None, padding=(0, 2))
+    table.add_column(style="dim", width=26)
+    table.add_column()
+    table.add_row("Run ID", str(result.run_id))
+    table.add_row("Status", result.status)
+    table.add_row("Total pending", str(result.total))
+    table.add_row("[green]✓ Classified[/green]", f"[green]{result.classified}[/green]")
     table.add_row("[red]✗ Errors[/red]", f"[red]{result.errors}[/red]")
     console.print(table)
     console.print(f"  [dim]Elapsed: {elapsed:.1f}s[/dim]")
@@ -100,8 +120,19 @@ def cli() -> None:
     type=click.Choice(["initial", "periodic"], case_sensitive=False),
     required=True,
 )
-def from_config(config_name: str, mode: str) -> None:
-    """Fetch FB Marketplace listings via futurafree actor and load to facebook.facebook_listings_new_raw."""
+@click.option(
+    "--stage", "-s",
+    type=click.Choice(["scrape", "classify", "all"], case_sensitive=False),
+    default="all", show_default=True,
+)
+def from_config(config_name: str, mode: str, stage: str) -> None:
+    """Fetch FB Marketplace listings and optionally classify them.
+
+    --stage scrape    scrape only (no Gemini)
+    --stage classify  classify already-scraped rows (no Apify call)
+    --stage all       scrape then classify (default)
+    """
+    stage = stage.lower()
     console.print()
     total_start = time.monotonic()
 
@@ -113,32 +144,62 @@ def from_config(config_name: str, mode: str) -> None:
         return
 
     event_id = _resolve_event(config)
-    mode_cfg = fb_config[f"{mode}_run"]
 
-    run_input = build_run_input(
-        search_terms=fb_config["search_terms"],
-        latitude=str(fb_config["latitude"]),
-        longitude=str(fb_config["longitude"]),
-        min_price=str(fb_config.get("min_price", "0")),
-        max_price=str(fb_config.get("max_price", "10000")),
-        days_listed=int(mode_cfg["days_listed"]),
-        listings_per_search=int(mode_cfg["listings_per_search"]),
-        search_radius_km=fb_config.get("search_radius_km"),
-        use_deduplication=bool(mode_cfg.get("use_deduplication", False)),
-    )
+    if stage in ("scrape", "all"):
+        mode_cfg = fb_config[f"{mode}_run"]
+        run_input = build_run_input(
+            search_terms=fb_config["search_terms"],
+            latitude=str(fb_config["latitude"]),
+            longitude=str(fb_config["longitude"]),
+            min_price=str(fb_config.get("min_price", "0")),
+            max_price=str(fb_config.get("max_price", "10000")),
+            days_listed=int(mode_cfg["days_listed"]),
+            listings_per_search=int(mode_cfg["listings_per_search"]),
+            search_radius_km=fb_config.get("search_radius_km"),
+            use_deduplication=bool(mode_cfg.get("use_deduplication", False)),
+        )
 
-    runner = FuturafreeRunner(settings.apify_api_token, fb_config["actor_id"])
-    logger.info(f"[FB-Mkt] Running actor for {config_name!r} mode={mode!r}")
-    records = runner.run(run_input)
+        runner = FuturafreeRunner(settings.apify_api_token, fb_config["actor_id"])
+        logger.info(f"[FB-New] Running actor for {config_name!r} mode={mode!r}")
+        records = runner.run(run_input)
 
-    t0 = time.monotonic()
-    result = run_from_records(
-        records,
-        source=f"{config_name}:{mode}",
-        event_id=event_id,
-        event_key=config["event_key"],
-    )
-    _print_result("FB Marketplace — Stage 1", result, time.monotonic() - t0)
+        t0 = time.monotonic()
+        scrape_result = run_from_records(
+            records,
+            source=f"{config_name}:{mode}",
+            event_id=event_id,
+            event_key=config["event_key"],
+        )
+        _print_scrape_result("FB Marketplace — Stage 1 (Scrape)", scrape_result, time.monotonic() - t0)
+
+    if stage in ("classify", "all"):
+        t0 = time.monotonic()
+        classify_result = run_classify(event_id=event_id, event_key=config["event_key"])
+        _print_classify_result("FB Marketplace — Stage 2 (Classify)", classify_result, time.monotonic() - t0)
+
+    console.print(Rule(f"[dim]Done in {time.monotonic() - total_start:.1f}s[/dim]"))
+    console.print()
+
+
+@cli.command("classify")
+@click.option("--config", "-c", "config_name", required=False, default=None)
+def classify_cmd(config_name: Optional[str]) -> None:
+    """Run LLM classification on unclassified facebook_listings_new_raw rows.
+
+    Without --config, classifies all unclassified listings across every event.
+    """
+    console.print()
+    total_start = time.monotonic()
+
+    event_id = None
+    event_key = None
+    if config_name:
+        config = _load_config(config_name)
+        event_id = _resolve_event(config)
+        event_key = config["event_key"]
+
+    result = run_classify(event_id=event_id, event_key=event_key)
+    _print_classify_result("FB Marketplace — Stage 2 (Classify)", result, time.monotonic() - total_start)
     console.print(Rule(f"[dim]Done in {time.monotonic() - total_start:.1f}s[/dim]"))
     console.print()
 

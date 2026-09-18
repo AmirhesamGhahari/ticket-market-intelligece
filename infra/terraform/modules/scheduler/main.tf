@@ -66,12 +66,13 @@ resource "aws_lambda_function" "fanout" {
 
   environment {
     variables = {
-      ECS_CLUSTER_ARN         = var.ecs_cluster_arn
-      TASK_DEFINITION_FAMILY  = var.task_family
-      SUBNET_IDS              = join(",", var.public_subnet_ids)
-      SECURITY_GROUP_ID       = var.ecs_task_sg_id
-      FACEBOOK_EVENT_CONFIGS  = jsonencode(var.facebook_event_configs)
-      SEATGEEK_EVENT_CONFIGS  = jsonencode(var.seatgeek_event_configs)
+      ECS_CLUSTER_ARN          = var.ecs_cluster_arn
+      TASK_DEFINITION_FAMILY   = var.task_family
+      SUBNET_IDS               = join(",", var.public_subnet_ids)
+      SECURITY_GROUP_ID        = var.ecs_task_sg_id
+      FACEBOOK_EVENT_CONFIGS   = jsonencode(var.facebook_event_configs)
+      FACEBOOK_NEW_EVENT_CONFIGS = jsonencode(var.facebook_new_event_configs)
+      SEATGEEK_EVENT_CONFIGS   = jsonencode(var.seatgeek_event_configs)
     }
   }
 }
@@ -104,7 +105,7 @@ resource "aws_iam_role_policy" "scheduler_invoke" {
   })
 }
 
-# Facebook — every 12 hours, first run at 04:00 UTC (04:00, 16:00)
+# Facebook legacy (raidr-api) — every 12 hours, first run at 04:00 UTC (04:00, 16:00)
 # Disabled by default — enable manually in the AWS console when ready.
 resource "aws_scheduler_schedule" "facebook_periodic" {
   name       = "${var.app_name}-facebook-periodic"
@@ -121,7 +122,28 @@ resource "aws_scheduler_schedule" "facebook_periodic" {
   target {
     arn      = aws_lambda_function.fanout.arn
     role_arn = aws_iam_role.scheduler.arn
-    input    = jsonencode({ mode = "periodic", command = "from-apify", stage = "all" })
+    input    = jsonencode({ mode = "periodic", command = "from-facebook-legacy", stage = "all" })
+  }
+}
+
+# Facebook new (futurafree) — every 12 hours at 05:00 UTC (04:00, 17:00)
+# Disabled by default — enable manually in the AWS console when ready.
+resource "aws_scheduler_schedule" "facebook_new_periodic" {
+  name       = "${var.app_name}-facebook-new-periodic"
+  group_name = "default"
+  state      = "DISABLED"
+
+  flexible_time_window {
+    mode = "OFF"
+  }
+
+  schedule_expression          = "cron(0 5/12 * * ? *)"
+  schedule_expression_timezone = "UTC"
+
+  target {
+    arn      = aws_lambda_function.fanout.arn
+    role_arn = aws_iam_role.scheduler.arn
+    input    = jsonencode({ mode = "periodic", command = "from-facebook-new", stage = "all" })
   }
 }
 

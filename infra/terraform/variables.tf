@@ -74,11 +74,19 @@ variable "github_branch" {
 }
 
 variable "facebook_event_configs" {
-  description = "List of event config names (YAML files in configs/) the Facebook (from-apify) schedule runs"
+  description = "Config names (YAML in configs/) for the legacy raidr-api Facebook pipeline"
   type        = list(string)
+  default     = []
+}
+
+variable "facebook_new_event_configs" {
+  description = "Config names (YAML in configs/) for the new futurafree Facebook pipeline"
+  type        = list(string)
+  default     = []
 }
 
 variable "seatgeek_event_configs" {
-  description = "List of event config names (YAML files in configs/) the SeatGeek (from-seatgeek) schedule runs"
+  description = "Config names (YAML in configs/) for the SeatGeek pipeline"
   type        = list(string)
+  default     = []
 }

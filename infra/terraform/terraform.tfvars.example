@@ -12,5 +12,7 @@ github_owner   = "your-github-username"
 github_repo    = "ticket-tracker"
 github_branch  = "main"
 
-# Optional: override the default list of event configs scheduled to run
-# event_configs = ["veld_2026", "electric_island_sep2026"]
+# Event configs per source pipeline — controls what each EventBridge schedule fans out to
+# facebook_event_configs     = ["veld_2026"]                          # legacy raidr-api actor
+# facebook_new_event_configs = ["olivia_rodrigo_toronto_oct2026"]     # new futurafree actor
+# seatgeek_event_configs     = ["veld_2026", "olivia_rodrigo_toronto_oct2026"]

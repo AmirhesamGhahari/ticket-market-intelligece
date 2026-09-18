@@ -22,11 +22,17 @@ if config.config_file_name is not None:
 
 target_metadata = Base.metadata
 
-_TRACKED_SCHEMAS = {None, "public", "facebook", "stubhub"}
+_TRACKED_SCHEMAS = {"public", "facebook", "stubhub"}
 
 
 def _include_name(name, type_, parent_names):
-    """Tell autogenerate which schemas to scan for non-public schema support."""
+    """Tell autogenerate which schemas to scan.
+
+    None is excluded: Event and PipelineRun now declare schema='public'
+    explicitly, so autogenerate finds them under the 'public' entry.
+    Keeping None would cause Alembic to scan the default schema twice and
+    produce spurious diffs against the models it already matched under 'public'.
+    """
     if type_ == "schema":
         return name in _TRACKED_SCHEMAS
     return True

@@ -23,7 +23,13 @@ variable "ecs_task_sg_id" {
 }
 
 variable "facebook_event_configs" {
-  type = list(string)
+  description = "Config names for the legacy raidr-api Facebook pipeline (run-facebook-legacy)"
+  type        = list(string)
+}
+
+variable "facebook_new_event_configs" {
+  description = "Config names for the new futurafree Facebook pipeline (run-facebook-new)"
+  type        = list(string)
 }
 
 variable "seatgeek_event_configs" {

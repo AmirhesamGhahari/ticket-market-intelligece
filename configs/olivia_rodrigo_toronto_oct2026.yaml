@@ -4,37 +4,64 @@ event_date: "2026-10-26"
 
 sources:
 
-  facebook_marketplace:
+  facebook_legacy:
+    enabled: true
+    actor_id: "raidr-api/facebook-marketplace-scraper"
+    proxy:
+      use_apify_proxy: true
+      apify_proxy_groups: ["RESIDENTIAL"]
+      apify_proxy_country: "CA"
+    radius_km: 500
+    search_terms:
+      - "olivia rodrigo"
+      - "olivia rodrigo ticket"
+      - "olivia rodrigo toronto"
+      - "guts tour ticket"
+      - "guts tour toronto"
+      - "olivia rodrigo october"
+    initial_run:
+      cities:
+        - "Toronto, Ontario"
+      listings_per_search: 400
+      use_deduplication: false
+      fetch_detailed_items: false
+      filter_keywords: "olivia"
+    periodic_run:
+      cities:
+        - "Toronto, Ontario"
+      listings_per_search: 100
+      days_listed: "30"
+      use_deduplication: false
+      fetch_detailed_items: false
+      filter_keywords: "olivia"
+
+  facebook_new:
     enabled: true
     actor_id: "futurafree/facebook-marketplace-scraper-discord-alerts"
     latitude: "43.6532"
     longitude: "-79.3832"
-    search_radius_km: 130      # actor max is 130; omit to search with no distance limit
+    search_radius_km: 130
     min_price: "0"
     max_price: "5000"
     search_terms:
+      - "olivia rodrigo"
       - "olivia rodrigo ticket"
       - "olivia rodrigo toronto"
-      - "olivia rodrigo toronto ticket"
       - "guts tour ticket"
       - "guts tour toronto"
-      - "olivia rodrigo floor"
-      - "olivia rodrigo pit"
       - "olivia rodrigo october"
-      - "olivia rodrigo vip"
-      - "selling olivia rodrigo"
-      - "olivia rodrigo wristband"
-      - "olivia rodrigo section"
-
     initial_run:
-      listings_per_search: 500
+      listings_per_search: 30
       days_listed: 30
-      use_deduplication: false   # get everything on first run; our CDC handles dedup
-
+      use_deduplication: false
     periodic_run:
-      listings_per_search: 100
-      days_listed: 1
-      use_deduplication: true    # only new listings not already seen by the actor
+      listings_per_search: 10
+      days_listed: 7
+      use_deduplication: true
+
+  seatgeek:
+    enabled: false
+    event_id: null
 
   stubhub:
     enabled: true

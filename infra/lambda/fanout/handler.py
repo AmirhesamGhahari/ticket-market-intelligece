@@ -11,19 +11,16 @@ def lambda_handler(event, context):
     task_family = os.environ["TASK_DEFINITION_FAMILY"]
     subnets = os.environ["SUBNET_IDS"].split(",")
     sg = os.environ["SECURITY_GROUP_ID"]
-    facebook_legacy_configs = json.loads(os.environ["FACEBOOK_EVENT_CONFIGS"])
-    facebook_new_configs = json.loads(os.environ["FACEBOOK_NEW_EVENT_CONFIGS"])
-    seatgeek_configs = json.loads(os.environ["SEATGEEK_EVENT_CONFIGS"])
+    event_configs = json.loads(os.environ["EVENT_CONFIGS"])
 
     # Optional payload overrides — omit all to keep the default scheduled fan-out behaviour.
-    # config_name: run only this one config instead of the source's full config list
+    # config_name: run only this one config instead of the full event list
     # command:
-    #   "from-facebook-legacy"    — legacy raidr-api FB scrape (run-facebook-legacy from-apify)
+    #   "from-facebook-legacy"     — legacy raidr-api FB scrape (run-facebook-legacy from-apify)
     #   "classify-facebook-legacy" — legacy FB classify only
-    #   "from-facebook-new"       — new futurafree FB scrape + classify (run-facebook-new from-config)
-    #   "classify-facebook-new"   — new FB classify only
-    #   "from-seatgeek"           — SeatGeek scrape
-    #   omit (or null)            — scheduled full run across all sources
+    #   "from-facebook-new"        — new futurafree FB scrape + classify (run-facebook-new from-config)
+    #   "classify-facebook-new"    — new FB classify only
+    #   "from-seatgeek"            — SeatGeek price snapshot
     # mode:  "initial" | "periodic" (default "periodic")
     # stage: "scrape" | "classify" | "all" (default "all", applies to facebook sources)
     target_config = event.get("config_name")
@@ -58,35 +55,36 @@ def lambda_handler(event, context):
         results.append({"config": config_name, "command": cmd, "tasks": task_arns, "failures": failures})
         print(f"Launched {config_name} ({' '.join(cmd)}): tasks={task_arns} failures={failures}")
 
-    # ── Explicit single-source commands ───────────────────────────────────────
+    configs = [target_config] if target_config else event_configs
+
+    # ── Explicit single-pipeline commands ─────────────────────────────────────
 
     if command in ("from-apify", "from-facebook-legacy"):
-        for cfg in ([target_config] if target_config else facebook_legacy_configs):
+        for cfg in configs:
             _launch(cfg, ["run-facebook-legacy", "from-apify", "--config", cfg, "--mode", mode, "--stage", stage])
 
     elif command in ("classify", "classify-facebook-legacy"):
-        for cfg in ([target_config] if target_config else facebook_legacy_configs):
+        for cfg in configs:
             _launch(cfg, ["run-facebook-legacy", "classify", "--config", cfg])
 
     elif command == "from-facebook-new":
-        for cfg in ([target_config] if target_config else facebook_new_configs):
+        for cfg in configs:
             _launch(cfg, ["run-facebook-new", "from-config", "--config", cfg, "--mode", mode, "--stage", stage])
 
     elif command == "classify-facebook-new":
-        for cfg in ([target_config] if target_config else facebook_new_configs):
+        for cfg in configs:
             _launch(cfg, ["run-facebook-new", "classify", "--config", cfg])
 
     elif command == "from-seatgeek":
-        for cfg in ([target_config] if target_config else seatgeek_configs):
+        for cfg in configs:
             _launch(cfg, ["run-seatgeek", "from-api", "--config", cfg, "--mode", mode])
 
     else:
-        # Scheduled full run — fan out every source against its own config list
-        for cfg in ([target_config] if target_config else facebook_legacy_configs):
+        # Scheduled full run — fan out all pipelines for all events.
+        # Each CLI exits early if its source is disabled in the event config.
+        for cfg in configs:
             _launch(cfg, ["run-facebook-legacy", "from-apify", "--config", cfg, "--mode", mode, "--stage", stage])
-        for cfg in ([target_config] if target_config else facebook_new_configs):
             _launch(cfg, ["run-facebook-new", "from-config", "--config", cfg, "--mode", mode, "--stage", stage])
-        for cfg in ([target_config] if target_config else seatgeek_configs):
             _launch(cfg, ["run-seatgeek", "from-api", "--config", cfg, "--mode", mode])
 
     return {"launched": len(results), "results": results}

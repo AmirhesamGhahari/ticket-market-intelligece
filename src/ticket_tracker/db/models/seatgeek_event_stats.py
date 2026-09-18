@@ -50,4 +50,5 @@ class SeatGeekEventStats(Base):
         ForeignKeyConstraint(["pipeline_run_id"], ["public.pipeline_runs.id"], name="fk_sg_event_stats_run_id"),
         UniqueConstraint("event_id", "stat_date", name="uq_sg_event_stats_event_date"),
         Index("idx_sg_event_stats_run", "pipeline_run_id"),
+        {"schema": "public"},
     )

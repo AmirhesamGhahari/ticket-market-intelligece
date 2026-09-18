@@ -12,7 +12,10 @@ github_owner   = "your-github-username"
 github_repo    = "ticket-tracker"
 github_branch  = "main"
 
-# Event configs per source pipeline — controls what each EventBridge schedule fans out to
-# facebook_event_configs     = ["veld_2026"]                          # legacy raidr-api actor
-# facebook_new_event_configs = ["olivia_rodrigo_toronto_oct2026"]     # new futurafree actor
-# seatgeek_event_configs     = ["veld_2026", "olivia_rodrigo_toronto_oct2026"]
+# All event config names in configs/ — a single list for all pipelines.
+# Each pipeline CLI checks sources.<pipeline>.enabled in the YAML and skips if false.
+# event_configs = [
+#   "veld_2026",
+#   "charlixcx_toronto_sep2026",
+#   "olivia_rodrigo_toronto_oct2026",
+# ]

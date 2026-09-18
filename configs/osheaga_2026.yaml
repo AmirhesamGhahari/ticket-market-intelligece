@@ -1,57 +1,68 @@
 event_key: "osheaga_2026"
 event_name: "Osheaga Music Festival 2026"
-event_keyword: "osheaga"
-apify_actor_id: "raidr-api/facebook-marketplace-scraper"
-seatgeek_event_id: null  # find at seatgeek.com — search Osheaga and grab the ID from the URL
-radius_km: "250"
 
-proxy:
-  use_apify_proxy: true
-  apify_proxy_groups: ["RESIDENTIAL"]
-  apify_proxy_country: "CA"
+sources:
 
-# ── Search terms ───────────────────────────────────────────────────────────────
-# Shared across all cities and both run modes.
-# Apify advanced mode caps at 50 searches per actor run — trim if you exceed that.
+  facebook_legacy:
+    enabled: true
+    actor_id: "raidr-api/facebook-marketplace-scraper"
+    proxy:
+      use_apify_proxy: true
+      apify_proxy_groups: ["RESIDENTIAL"]
+      apify_proxy_country: "CA"
+    radius_km: 250
+    search_terms:
+      - "osheaga"
+      - "osheaga ticket"
+      - "osheaga pass"
+      - "osheaga wristband"
+      - "osheaga bracelet"
+      - "osheaga single day"
+      - "osheaga friday"
+      - "osheaga saturday"
+      - "osheaga sunday"
+      - "osheaga vip"
+      - "osheaga ga"
+      - "osheaga 2026"
+    initial_run:
+      cities:
+        - "Montreal, Quebec"
+      listings_per_search: 500
+      use_deduplication: false
+      fetch_detailed_items: false
+      filter_keywords: "osheaga"
+    periodic_run:
+      cities:
+        - "Montreal, Quebec"
+      listings_per_search: 100
+      days_listed: "1"
+      use_deduplication: true
+      fetch_detailed_items: false
+      filter_keywords: "osheaga"
 
-search_terms:
-  - "osheaga"
-  - "osheaga ticket"
-  - "osheaga pass"
-  - "veld 3 day"
-  - "osheaga wristband"
-  - "osheaga bracelet"
-  - "osheaga single day"
-  - "osheaga friday"
-  - "osheaga saturday"
-  - "osheaga sunday"
-  - "osheaga vip"
-  - "osheaga ga"
-  - "osheaga 2026"
+  facebook_new:
+    enabled: false
+    actor_id: "futurafree/facebook-marketplace-scraper-discord-alerts"
+    latitude: null
+    longitude: null
+    search_radius_km: 130
+    min_price: "0"
+    max_price: "5000"
+    search_terms: []
+    initial_run:
+      listings_per_search: 500
+      days_listed: 30
+      use_deduplication: false
+    periodic_run:
+      listings_per_search: 100
+      days_listed: 1
+      use_deduplication: true
 
+  seatgeek:
+    enabled: false
+    event_id: null
 
-# ── Initial run ────────────────────────────────────────────────────────────────
-# Run once to capture the full available history (~30-day FB window).
-# No date filter, no Apify-level dedup — get everything.
-# One actor run is made per city.
-
-initial_run:
-  cities:
-    - "Montreal, Quebec"
-  use_deduplication: false
-  fetch_detailed_items: false
-  listings_per_search: 500
-  filter_keywords: "osheaga"
-
-# ── Periodic run ───────────────────────────────────────────────────────────────
-# Run every 6 hours. Apify dedup skips listings seen in prior runs.
-# days_listed="1" keeps each search fast and cheap.
-
-periodic_run:
-  cities:
-    - "Toronto, Quebec"
-  use_deduplication: true
-  fetch_detailed_items: false
-  listings_per_search: 100
-  filter_keywords: "osheaga"
-  days_listed: "1"
+  stubhub:
+    enabled: false
+    event_url: null
+    max_listings: 9999

@@ -73,20 +73,8 @@ variable "github_branch" {
   default     = "main"
 }
 
-variable "facebook_event_configs" {
-  description = "Config names (YAML in configs/) for the legacy raidr-api Facebook pipeline"
-  type        = list(string)
-  default     = []
-}
-
-variable "facebook_new_event_configs" {
-  description = "Config names (YAML in configs/) for the new futurafree Facebook pipeline"
-  type        = list(string)
-  default     = []
-}
-
-variable "seatgeek_event_configs" {
-  description = "Config names (YAML in configs/) for the SeatGeek pipeline"
+variable "event_configs" {
+  description = "Config names (YAML in configs/) for all pipelines — each CLI skips if its source is disabled in the config"
   type        = list(string)
   default     = []
 }

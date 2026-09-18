@@ -1,11 +1,11 @@
 """Facebook Marketplace pipeline CLI.
 
 Commands:
-    run-facebook from-apify --config veld_2026 --mode initial
-    run-facebook from-apify --config veld_2026 --mode periodic
-    run-facebook from-file --config veld_2026 --file sample_data/data.json
-    run-facebook classify
-    run-facebook classify --config veld_2026
+    run-facebook-legacy from-apify --config veld_2026 --mode initial
+    run-facebook-legacy from-apify --config veld_2026 --mode periodic
+    run-facebook-legacy from-file --config veld_2026 --file sample_data/data.json
+    run-facebook-legacy classify
+    run-facebook-legacy classify --config veld_2026
 """
 
 from __future__ import annotations
@@ -82,10 +82,11 @@ def _resolve_event(config: dict) -> uuid.UUID:
 
 
 def _build_run_inputs(config: dict, mode: str) -> list[dict]:
-    run_config = config[f"{mode}_run"]
+    legacy_cfg = config["sources"]["facebook_legacy"]
+    run_config = legacy_cfg[f"{mode}_run"]
 
     searches = []
-    for term in config["search_terms"]:
+    for term in legacy_cfg["search_terms"]:
         entry: dict = {"searchTerm": term}
         if run_config.get("listings_per_search"):
             entry["listingsPerSearch"] = run_config["listings_per_search"]
@@ -100,15 +101,15 @@ def _build_run_inputs(config: dict, mode: str) -> list[dict]:
         run_input: dict = {
             "searchMode": "advanced",
             "location": city,
-            "radiusKm": str(config["radius_km"]),
+            "radiusKm": str(legacy_cfg["radius_km"]),
             "searches": searches,
             "listingsPerSearch": run_config["listings_per_search"],
             "useDeduplication": run_config["use_deduplication"],
             "fetchDetailedItems": run_config.get("fetch_detailed_items", False),
             "proxyConfiguration": {
-                "useApifyProxy": config["proxy"]["use_apify_proxy"],
-                "apifyProxyGroups": config["proxy"]["apify_proxy_groups"],
-                "apifyProxyCountry": config["proxy"]["apify_proxy_country"],
+                "useApifyProxy": legacy_cfg["proxy"]["use_apify_proxy"],
+                "apifyProxyGroups": legacy_cfg["proxy"]["apify_proxy_groups"],
+                "apifyProxyCountry": legacy_cfg["proxy"]["apify_proxy_country"],
             },
         }
         if run_config.get("max_listing_age") is not None:
@@ -184,11 +185,17 @@ def from_apify(config_name: str, mode: str, stage: str) -> None:
     total_start = time.monotonic()
 
     config = _load_config(config_name)
+    legacy_cfg = config.get("sources", {}).get("facebook_legacy", {})
+
+    if not legacy_cfg.get("enabled", False):
+        console.print(f"[yellow]facebook_legacy is disabled for {config_name!r} — skipping.[/yellow]")
+        return
+
     event_id = _resolve_event(config)
 
     if stage in ("scrape", "all"):
         run_inputs = _build_run_inputs(config, mode)
-        runner = ApifyRunner(settings.apify_api_token, config["apify_actor_id"])
+        runner = ApifyRunner(settings.apify_api_token, legacy_cfg["actor_id"])
 
         all_records: list[dict] = []
         for run_input in run_inputs:

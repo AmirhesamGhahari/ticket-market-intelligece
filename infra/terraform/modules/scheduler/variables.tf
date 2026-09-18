@@ -22,18 +22,9 @@ variable "ecs_task_sg_id" {
   type = string
 }
 
-variable "facebook_event_configs" {
-  description = "Config names for the legacy raidr-api Facebook pipeline (run-facebook-legacy)"
+variable "event_configs" {
+  description = "Config names (YAML in configs/) for all pipelines — each CLI skips if its source is disabled in the config"
   type        = list(string)
-}
-
-variable "facebook_new_event_configs" {
-  description = "Config names for the new futurafree Facebook pipeline (run-facebook-new)"
-  type        = list(string)
-}
-
-variable "seatgeek_event_configs" {
-  type = list(string)
 }
 
 variable "lambda_source_dir" {

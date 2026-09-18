@@ -1,47 +1,60 @@
 event_key: "ac/dc_toronto_sep2026"
 event_name: "AC/DC Toronto Tour Sep 2026"
-event_keyword: "ac/dc_toronto"
-apify_actor_id: "raidr-api/facebook-marketplace-scraper"
-seatgeek_event_id: null  # find at seatgeek.com — search Iron Maiden Montreal and grab the ID from the URL
-radius_km: "250"
 
-proxy:
-  use_apify_proxy: true
-  apify_proxy_groups: ["RESIDENTIAL"]
-  apify_proxy_country: "CA"
+sources:
 
-# ── Search terms ───────────────────────────────────────────────────────────────
-# Shared across all cities and both run modes.
-# Apify advanced mode caps at 50 searches per actor run — trim if you exceed that.
+  facebook_legacy:
+    enabled: true
+    actor_id: "raidr-api/facebook-marketplace-scraper"
+    proxy:
+      use_apify_proxy: true
+      apify_proxy_groups: ["RESIDENTIAL"]
+      apify_proxy_country: "CA"
+    radius_km: 250
+    search_terms:
+      - "ac/dc"
+      - "ac/dc tour"
+      - "ac/dc sep"
+      - "ac/dc ticket"
+    initial_run:
+      cities:
+        - "Toronto, Ontario"
+      listings_per_search: 400
+      use_deduplication: false
+      fetch_detailed_items: false
+      filter_keywords: "ac/dc"
+    periodic_run:
+      cities:
+        - "Toronto, Ontario"
+      listings_per_search: 100
+      days_listed: "30"
+      use_deduplication: false
+      fetch_detailed_items: false
+      filter_keywords: "ac/dc"
 
-search_terms:
-  - "ac/dc"
-  - "ac/dc tour"
-  - "ac/dc sep"
-  - "ac/dc ticket"
+  facebook_new:
+    enabled: false
+    actor_id: "futurafree/facebook-marketplace-scraper-discord-alerts"
+    latitude: null
+    longitude: null
+    search_radius_km: 130
+    min_price: "0"
+    max_price: "5000"
+    search_terms: []
+    initial_run:
+      listings_per_search: 500
+      days_listed: 30
+      use_deduplication: false
+    periodic_run:
+      listings_per_search: 100
+      days_listed: 1
+      use_deduplication: true
 
-# ── Initial run ────────────────────────────────────────────────────────────────
-# Run once to capture the full available history (~30-day FB window).
-# No date filter, no Apify-level dedup — get everything.
-# One actor run is made per city.
+  seatgeek:
+    enabled: false
+    event_id: null
 
-initial_run:
-  cities:
-    - "Toronto, Ontario"
-  use_deduplication: false
-  fetch_detailed_items: false
-  listings_per_search: 400
-  filter_keywords: "ac/dc"
-
-# ── Periodic run ───────────────────────────────────────────────────────────────
-# Run every 6 hours. Apify dedup skips listings seen in prior runs.
-# days_listed="1" keeps each search fast and cheap.
-
-periodic_run:
-  cities:
-    - "Toronto, Ontario"
-  use_deduplication: false
-  fetch_detailed_items: false
-  listings_per_search: 100
-  days_listed: "30"
-  filter_keywords: "ac/dc"
+  stubhub:
+    enabled: false
+    event_url: null
+    max_listings: 9999

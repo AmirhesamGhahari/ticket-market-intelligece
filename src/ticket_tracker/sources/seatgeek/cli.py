@@ -123,12 +123,21 @@ def from_api(config_name: str, mode: str) -> None:
     total_start = time.monotonic()
 
     config = _load_config(config_name)
-    sg_event_id = config.get("seatgeek_event_id")
+    sg_cfg = config.get("sources", {}).get("seatgeek", {})
 
+    if not sg_cfg.get("enabled", False):
+        console.print(
+            f"[yellow]seatgeek is disabled for {config_name!r} — skipping.[/yellow]\n"
+            "[dim]Set sources.seatgeek.enabled: true and provide an event_id to enable.[/dim]"
+        )
+        console.print()
+        return
+
+    sg_event_id = sg_cfg.get("event_id")
     if not sg_event_id:
         console.print(
-            f"[yellow]No seatgeek_event_id in config {config_name!r} — skipping.[/yellow]\n"
-            "[dim]Add seatgeek_event_id to the config YAML to enable SeatGeek for this event.[/dim]"
+            f"[yellow]No seatgeek event_id in config {config_name!r} — skipping.[/yellow]\n"
+            "[dim]Set sources.seatgeek.event_id in the config YAML to enable SeatGeek for this event.[/dim]"
         )
         console.print()
         return

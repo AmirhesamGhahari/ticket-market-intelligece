@@ -137,10 +137,10 @@ def from_config(config_name: str, mode: str, stage: str) -> None:
     total_start = time.monotonic()
 
     config = _load_config(config_name)
-    fb_config = config.get("sources", {}).get("facebook_marketplace", {})
+    fb_config = config.get("sources", {}).get("facebook_new", {})
 
     if not fb_config.get("enabled", False):
-        console.print("[yellow]facebook_marketplace source is disabled in this config.[/yellow]")
+        console.print(f"[yellow]facebook_new is disabled for {config_name!r} — skipping.[/yellow]")
         return
 
     event_id = _resolve_event(config)

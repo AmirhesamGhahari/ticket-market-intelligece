@@ -1,47 +1,60 @@
 event_key: "bts_arirang_aug_2026"
-event_name: "Electric_Island Festival Sep 2026"
-event_keyword: "bts_arirang"
-apify_actor_id: "raidr-api/facebook-marketplace-scraper"
-seatgeek_event_id: null  # find at seatgeek.com — search BTS and grab the ID from the URL
-radius_km: "250"
+event_name: "BTS Arirang Toronto Aug 2026"
 
-proxy:
-  use_apify_proxy: true
-  apify_proxy_groups: ["RESIDENTIAL"]
-  apify_proxy_country: "CA"
+sources:
 
-# ── Search terms ───────────────────────────────────────────────────────────────
-# Shared across all cities and both run modes.
-# Apify advanced mode caps at 50 searches per actor run — trim if you exceed that.
+  facebook_legacy:
+    enabled: true
+    actor_id: "raidr-api/facebook-marketplace-scraper"
+    proxy:
+      use_apify_proxy: true
+      apify_proxy_groups: ["RESIDENTIAL"]
+      apify_proxy_country: "CA"
+    radius_km: 250
+    search_terms:
+      - "bts"
+      - "bts arirang"
+      - "bts toronto"
+      - "bts day"
+      - "bts tour"
+    initial_run:
+      cities:
+        - "Toronto, Ontario"
+      listings_per_search: 200
+      use_deduplication: false
+      fetch_detailed_items: false
+      filter_keywords: "bts"
+    periodic_run:
+      cities:
+        - "Toronto, Ontario"
+      listings_per_search: 100
+      days_listed: "1"
+      use_deduplication: true
+      fetch_detailed_items: false
 
-search_terms:
-  - "bts"
-  - "bts arirang"
-  - "bts toronto"
-  - "bts day"
-  - "bts tour"
+  facebook_new:
+    enabled: false
+    actor_id: "futurafree/facebook-marketplace-scraper-discord-alerts"
+    latitude: null
+    longitude: null
+    search_radius_km: 130
+    min_price: "0"
+    max_price: "5000"
+    search_terms: []
+    initial_run:
+      listings_per_search: 500
+      days_listed: 30
+      use_deduplication: false
+    periodic_run:
+      listings_per_search: 100
+      days_listed: 1
+      use_deduplication: true
 
-# ── Initial run ────────────────────────────────────────────────────────────────
-# Run once to capture the full available history (~30-day FB window).
-# No date filter, no Apify-level dedup — get everything.
-# One actor run is made per city.
+  seatgeek:
+    enabled: false
+    event_id: null
 
-initial_run:
-  cities:
-    - "Toronto, Ontario"
-  use_deduplication: false
-  fetch_detailed_items: false
-  listings_per_search: 200
-  filter_keywords: "bts"
-
-# ── Periodic run ───────────────────────────────────────────────────────────────
-# Run every 6 hours. Apify dedup skips listings seen in prior runs.
-# days_listed="1" keeps each search fast and cheap.
-
-periodic_run:
-  cities:
-    - "Toronto, Ontario"
-  use_deduplication: true
-  fetch_detailed_items: false
-  listings_per_search: 100
-  days_listed: "1"
+  stubhub:
+    enabled: false
+    event_url: null
+    max_listings: 9999

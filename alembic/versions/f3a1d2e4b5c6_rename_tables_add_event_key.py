@@ -1,7 +1,7 @@
 """rename raw/transformed tables and add event_key column
 
 Revision ID: f3a1d2e4b5c6
-Revises: a2a4bb6970ed
+Revises: 700c170a1526
 Create Date: 2026-08-17
 
 Renames:

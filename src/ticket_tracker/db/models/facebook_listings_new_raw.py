@@ -51,11 +51,11 @@ class FacebookListingsNewRaw(Base):
 
     __table_args__ = (
         ForeignKeyConstraint(
-            ["event_id"], ["public.events.id"],
+            ["event_id"], ["events.id"],
             name="fk_fb_mkt_listing_raw_event_id",
         ),
         ForeignKeyConstraint(
-            ["pipeline_run_id"], ["public.pipeline_runs.id"],
+            ["pipeline_run_id"], ["pipeline_runs.id"],
             name="fk_fb_mkt_listing_raw_run_id",
         ),
         Index("idx_fb_mkt_listing_raw_event_listing", "event_id", "fb_listing_id"),

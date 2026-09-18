@@ -58,11 +58,11 @@ class StubHubListingRaw(Base):
 
     __table_args__ = (
         ForeignKeyConstraint(
-            ["event_id"], ["public.events.id"],
+            ["event_id"], ["events.id"],
             name="fk_sh_listing_raw_event_id",
         ),
         ForeignKeyConstraint(
-            ["pipeline_run_id"], ["public.pipeline_runs.id"],
+            ["pipeline_run_id"], ["pipeline_runs.id"],
             name="fk_sh_listing_raw_run_id",
         ),
         Index("idx_sh_listing_raw_event_listing", "event_id", "listing_id"),

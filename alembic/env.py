@@ -22,16 +22,18 @@ if config.config_file_name is not None:
 
 target_metadata = Base.metadata
 
-_TRACKED_SCHEMAS = {"public", "facebook", "stubhub"}
+_TRACKED_SCHEMAS = {None, "facebook", "stubhub"}
 
 
 def _include_name(name, type_, parent_names):
     """Tell autogenerate which schemas to scan.
 
-    None is excluded: Event and PipelineRun now declare schema='public'
-    explicitly, so autogenerate finds them under the 'public' entry.
-    Keeping None would cause Alembic to scan the default schema twice and
-    produce spurious diffs against the models it already matched under 'public'.
+    None = the default (public) schema: events, pipeline_runs, seatgeek_event_stats.
+    Keeping schema=None on those models avoids the Alembic behaviour where explicit
+    schema='public' causes autogenerate to treat them as new tables (not yet in DB).
+    Cross-schema FK strings use unqualified names ('events.id') so SQLAlchemy can
+    resolve them against the None-schema metadata entry; PostgreSQL resolves the DDL
+    FK via search_path at runtime.
     """
     if type_ == "schema":
         return name in _TRACKED_SCHEMAS

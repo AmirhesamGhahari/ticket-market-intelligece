@@ -50,8 +50,8 @@ class FacebookListingsLegacyRaw(Base):
     valid_to: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
     __table_args__ = (
-        ForeignKeyConstraint(["event_id"], ["public.events.id"], name="fk_fb_listing_raw_event_id"),
-        ForeignKeyConstraint(["pipeline_run_id"], ["public.pipeline_runs.id"], name="fk_fb_listing_raw_run_id"),
+        ForeignKeyConstraint(["event_id"], ["events.id"], name="fk_fb_listing_raw_event_id"),
+        ForeignKeyConstraint(["pipeline_run_id"], ["pipeline_runs.id"], name="fk_fb_listing_raw_run_id"),
         Index("idx_fb_listing_raw_event_listing", "event_id", "fb_listing_id"),
         Index("idx_fb_listing_raw_event_listed_at", "event_id", "listed_at"),
         Index("idx_fb_listing_raw_run", "pipeline_run_id"),

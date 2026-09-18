@@ -46,9 +46,8 @@ class SeatGeekEventStats(Base):
     )
 
     __table_args__ = (
-        ForeignKeyConstraint(["event_id"], ["public.events.id"], name="fk_sg_event_stats_event_id"),
-        ForeignKeyConstraint(["pipeline_run_id"], ["public.pipeline_runs.id"], name="fk_sg_event_stats_run_id"),
+        ForeignKeyConstraint(["event_id"], ["events.id"], name="fk_sg_event_stats_event_id"),
+        ForeignKeyConstraint(["pipeline_run_id"], ["pipeline_runs.id"], name="fk_sg_event_stats_run_id"),
         UniqueConstraint("event_id", "stat_date", name="uq_sg_event_stats_event_date"),
         Index("idx_sg_event_stats_run", "pipeline_run_id"),
-        {"schema": "public"},
     )

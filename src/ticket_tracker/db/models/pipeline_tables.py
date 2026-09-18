@@ -34,5 +34,4 @@ class PipelineRun(Base):
     __table_args__ = (
         Index("idx_pipeline_runs_lstarted_at", "started_at"),
         Index("idx_pipeline_runs_created_at", "created_at"),
-        {"schema": "public"},
     )

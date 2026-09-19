@@ -22,7 +22,7 @@ class FuturafreeRunner:
             raise
 
         try:
-            items = list(self._client.dataset(run["defaultDatasetId"]).iterate_items())
+            items = list(self._client.dataset(run.default_dataset_id).iterate_items())
         except Exception as exc:
             logger.error(f"[FB-Mkt] Failed to fetch dataset: {exc}")
             raise

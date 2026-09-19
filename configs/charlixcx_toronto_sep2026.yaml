@@ -40,19 +40,20 @@ sources:
     search_radius_km: 130
     min_price: "0"
     max_price: "5000"
+    filter_keywords: ["charli"]
     search_terms:
       - "charli xcx"
       - "charli brat"
       - "charli xcx sept"
       - "charli ticket"
     initial_run:
-      listings_per_search: 40
+      listings_per_search: 300
       days_listed: 30
       use_deduplication: false
     periodic_run:
-      listings_per_search: 10
-      days_listed: 7
-      use_deduplication: true
+      listings_per_search: 100
+      days_listed: 30
+      use_deduplication: false
 
   seatgeek:
     enabled: true

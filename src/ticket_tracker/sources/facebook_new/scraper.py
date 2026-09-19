@@ -41,6 +41,7 @@ def build_run_input(
     listings_per_search: int,
     search_radius_km: int | None = None,
     use_deduplication: bool = False,
+    filter_keywords: list[str] | None = None,
 ) -> dict:
     """Build the actor run_input for the futurafree actor.
 
@@ -61,5 +62,7 @@ def build_run_input(
     if search_radius_km is not None:
         capped = min(int(search_radius_km), 130)
         run_input["searchRadii"] = [str(capped)] * n
+    if filter_keywords:
+        run_input["filterKeywords"] = filter_keywords
 
     return run_input

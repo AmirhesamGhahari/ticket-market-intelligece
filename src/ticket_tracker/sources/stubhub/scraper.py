@@ -93,6 +93,7 @@ def _scrapfly_get(api_key: str, url: str, session_id: str) -> str:
 
 def _scrapfly_post(api_key: str, url: str, session_id: str, body: str) -> str:
     params = _base_params(api_key, url, session_id)
+    del params["unblocker"]  # unblocker is incompatible with method=POST
     params["method"] = "POST"
     params["body"] = body
     params["headers"] = json.dumps({"Content-Type": "application/json"})

@@ -14,7 +14,7 @@ SCRAPFLY_URL = "https://api.scrapfly.io/scrape"
 def scrape_event(
     api_key: str,
     event_url: str,
-    max_listings: int = 50,
+    max_listings: int = 200,
 ) -> list[dict]:
     """Scrape all ticket listings for one StubHub event.
 
@@ -53,7 +53,8 @@ def scrape_event(
         try:
             content = _scrapfly_post(api_key, event_url, session_id, body)
             data = json.loads(content)
-            items = data.get("grid", {}).get("items", [])
+            # IndexShGridOnly returns items at root; HTML page wraps them under "grid"
+            items = data.get("items") or data.get("grid", {}).get("items", [])
             logger.info(f"[StubHub] Page {page}: got {len(items)} items (response keys: {list(data.keys())})")
             if not items:
                 logger.warning(f"[StubHub] Page {page}: empty items — response snippet: {content[:300]}")
@@ -98,8 +99,6 @@ def _scrapfly_get(api_key: str, url: str, session_id: str) -> str:
 
 def _scrapfly_post(api_key: str, url: str, session_id: str, body: str) -> str:
     params = _base_params(api_key, url, session_id)
-    # headers param tells Scrapfly what headers to forward to StubHub
-    params["headers"] = json.dumps({"Content-Type": "application/json"})
     resp = httpx.post(
         SCRAPFLY_URL,
         params=params,

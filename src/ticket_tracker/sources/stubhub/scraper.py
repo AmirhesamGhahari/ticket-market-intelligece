@@ -93,11 +93,13 @@ def _scrapfly_get(api_key: str, url: str, session_id: str) -> str:
 
 def _scrapfly_post(api_key: str, url: str, session_id: str, body: str) -> str:
     params = _base_params(api_key, url, session_id)
-    del params["unblocker"]  # unblocker is incompatible with method=POST
-    params["method"] = "POST"
-    params["body"] = body
-    params["headers"] = json.dumps({"Content-Type": "application/json"})
-    resp = httpx.get(SCRAPFLY_URL, params=params, timeout=120)
+    resp = httpx.post(
+        SCRAPFLY_URL,
+        params=params,
+        content=body,
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+        timeout=120,
+    )
     resp.raise_for_status()
     return _unwrap(resp.json(), url)
 

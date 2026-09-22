@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import math
 import re
-import uuid
+import secrets
 
 import httpx
 from loguru import logger
@@ -25,7 +25,7 @@ def scrape_event(
     subsequent page, using the same Scrapfly session (sticky proxy) so
     DataDome cookies from phase 1 are carried forward.
     """
-    session_id = f"stubhub_{uuid.uuid4().hex[:8]}"
+    session_id = f"stubhub_{secrets.token_hex(4)}"
 
     # ── Phase 1: GET ──────────────────────────────────────────────────────────
     logger.info(f"[StubHub] GET {event_url}")
@@ -36,7 +36,7 @@ def scrape_event(
     total = int(grid.get("totalListingsCount", 0))
     logger.info(f"[StubHub] {total} total listings, got first {len(all_items)} from HTML")
 
-    pages_needed = math.ceil(min(max_listings, total) / 10)
+    pages_needed = math.ceil(min(total, max_listings) / 10)
 
     # ── Phase 2: POST pages 2..N ──────────────────────────────────────────────
     for page in range(2, pages_needed + 1):
@@ -49,13 +49,18 @@ def scrape_event(
             "ShowAllTickets": True,
             "SortBy": "RECOMMENDED",
             "SortDirection": 1,
-            "FilterSortSessionId": str(uuid.uuid4()).upper(),
         })
         try:
             content = _scrapfly_post(api_key, event_url, session_id, body)
             data = json.loads(content)
             items = data.get("grid", {}).get("items", [])
+            logger.info(f"[StubHub] Page {page}: got {len(items)} items (response keys: {list(data.keys())})")
+            if not items:
+                logger.warning(f"[StubHub] Page {page}: empty items — response snippet: {content[:300]}")
             all_items.extend(items)
+        except json.JSONDecodeError as exc:
+            logger.warning(f"[StubHub] Page {page} JSON parse failed: {exc} — content snippet: {content[:300] if 'content' in dir() else 'N/A'}")
+            continue
         except Exception as exc:
             logger.warning(f"[StubHub] Page {page} failed: {exc} — skipping")
             continue
@@ -93,6 +98,8 @@ def _scrapfly_get(api_key: str, url: str, session_id: str) -> str:
 
 def _scrapfly_post(api_key: str, url: str, session_id: str, body: str) -> str:
     params = _base_params(api_key, url, session_id)
+    # headers param tells Scrapfly what headers to forward to StubHub
+    params["headers"] = json.dumps({"Content-Type": "application/json"})
     resp = httpx.post(
         SCRAPFLY_URL,
         params=params,

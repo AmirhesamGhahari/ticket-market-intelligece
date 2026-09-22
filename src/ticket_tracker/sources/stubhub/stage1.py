@@ -57,10 +57,10 @@ def _parse_created_at(iso_str: Optional[str]) -> Optional[datetime]:
 # ── CDC helpers ────────────────────────────────────────────────────────────────
 
 
-_CDC_FIELDS = ("raw_price", "available_tickets", "display_price", "is_cheapest")
+_CDC_FIELDS = ("raw_price", "available_tickets", "display_price")
 
 _LOAD_CURRENT = text("""
-    SELECT listing_id, raw_price, available_tickets, display_price, is_cheapest
+    SELECT listing_id, raw_price, available_tickets, display_price
     FROM stubhub.listing_raw
     WHERE event_id = :event_id AND valid_to IS NULL
 """)

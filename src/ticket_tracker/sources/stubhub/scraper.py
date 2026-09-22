@@ -14,12 +14,12 @@ SCRAPFLY_URL = "https://api.scrapfly.io/scrape"
 def scrape_event(
     api_key: str,
     event_url: str,
-    max_listings: int = 9999,
+    max_listings: int = 50,
 ) -> list[dict]:
     """Scrape all ticket listings for one StubHub event.
 
-    Phase 1: GET the event page (asp=True, render_js=False) to extract the
-    first 10 listings embedded in window.digitalData and get the total count.
+    Phase 1: GET the event page (render_js=False) to extract the first batch
+    of listings from the index-data script tag and get the total count.
 
     Phase 2: POST to the same URL with Method=IndexShGridOnly for each
     subsequent page, using the same Scrapfly session (sticky proxy) so
@@ -33,7 +33,7 @@ def scrape_event(
 
     grid = _extract_grid(html)
     all_items: list[dict] = list(grid.get("items", []))
-    total = int(grid.get("totalListings", 0))
+    total = int(grid.get("totalListingsCount", 0))
     logger.info(f"[StubHub] {total} total listings, got first {len(all_items)} from HTML")
 
     pages_needed = math.ceil(min(max_listings, total) / 10)
@@ -80,6 +80,7 @@ def _base_params(api_key: str, url: str, session_id: str) -> dict:
         "session": session_id,
         "proxy_pool": "public_datacenter_pool",
         "country": "us",
+        "timeout": "75000",
     }
 
 
@@ -115,20 +116,29 @@ def _unwrap(response: dict, url: str) -> str:
 
 
 def _extract_grid(html: str) -> dict:
-    """Extract the grid object from window.digitalData embedded in the HTML."""
-    marker = "window.digitalData="
-    idx = html.find(marker)
-    if idx == -1:
-        raise ValueError("window.digitalData not found in StubHub HTML")
+    """Extract the grid object by scanning all application/json script tags.
 
-    brace_start = html.index("{", idx + len(marker))
-    decoder = json.JSONDecoder()
-    try:
-        data, _ = decoder.raw_decode(html, brace_start)
-    except json.JSONDecodeError as exc:
-        raise ValueError(f"Failed to parse window.digitalData JSON: {exc}") from exc
+    Scans every <script type="application/json"> block in document order and
+    returns the grid from the first one whose parsed content contains
+    grid.items (a list). This is intentionally ID-agnostic so it survives
+    StubHub renaming or reordering their embedded data blocks.
+    """
+    for m in re.finditer(
+        r'<script[^>]+type="application/json"[^>]*>(.*?)</script>',
+        html,
+        re.DOTALL | re.IGNORECASE,
+    ):
+        raw = m.group(1).strip()
+        if not raw.startswith("{"):
+            continue
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError:
+            continue
+        grid = data.get("grid")
+        if grid and isinstance(grid.get("items"), list):
+            return grid
 
-    grid = data.get("grid")
-    if grid is None:
-        raise ValueError("'grid' key missing from window.digitalData")
-    return grid
+    raise ValueError(
+        "No <script type='application/json'> block with grid.items found in StubHub HTML"
+    )

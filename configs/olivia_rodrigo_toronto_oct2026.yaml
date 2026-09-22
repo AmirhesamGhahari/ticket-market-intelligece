@@ -67,4 +67,4 @@ sources:
   stubhub:
     enabled: true
     event_url: "https://www.stubhub.com/olivia-rodrigo-toronto-tickets-10-26-2026/event/161041533/?quantity=0"
-    max_listings: 9999
+    max_listings: 50

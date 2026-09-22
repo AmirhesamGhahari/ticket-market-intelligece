@@ -3,6 +3,7 @@ app_name           = "ticket-tracker"
 
 apify_api_token    = "apify_api_REPLACE_ME"
 gemini_api_key     = "REPLACE_ME_gemini_api_key"
+scrapfly_api_key   = "scp-live-REPLACE_ME"
 db_master_username = "ticket_tracker"
 db_master_password = "REPLACE_ME_secure_password_min_8_chars"
 db_name            = "ticket_tracker"

@@ -40,7 +40,8 @@ resource "aws_iam_role_policy" "execution_secrets" {
         var.apify_token_secret_arn,
         var.gemini_api_key_secret_arn,
         var.seatgeek_client_id_secret_arn,
-        var.seatgeek_client_secret_secret_arn
+        var.seatgeek_client_secret_secret_arn,
+        var.scrapfly_api_key_secret_arn
       ]
     }]
   })
@@ -102,6 +103,10 @@ resource "aws_ecs_task_definition" "pipeline" {
       {
         name      = "SEATGEEK_CLIENT_SECRET"
         valueFrom = var.seatgeek_client_secret_secret_arn
+      },
+      {
+        name      = "SCRAPFLY_API_KEY"
+        valueFrom = var.scrapfly_api_key_secret_arn
       }
     ]
 

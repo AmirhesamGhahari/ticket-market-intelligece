@@ -43,6 +43,16 @@ resource "aws_secretsmanager_secret_version" "seatgeek_client_id" {
   secret_string = var.seatgeek_client_id
 }
 
+resource "aws_secretsmanager_secret" "scrapfly_api_key" {
+  name                    = "${var.app_name}/scrapfly-api-key"
+  recovery_window_in_days = 0
+}
+
+resource "aws_secretsmanager_secret_version" "scrapfly_api_key" {
+  secret_id     = aws_secretsmanager_secret.scrapfly_api_key.id
+  secret_string = var.scrapfly_api_key
+}
+
 resource "aws_secretsmanager_secret" "seatgeek_client_secret" {
   name                    = "${var.app_name}/seatgeek-client-secret"
   recovery_window_in_days = 0

@@ -22,6 +22,11 @@ variable "seatgeek_client_secret" {
   sensitive = true
 }
 
+variable "scrapfly_api_key" {
+  type      = string
+  sensitive = true
+}
+
 variable "db_master_username" {
   type = string
 }

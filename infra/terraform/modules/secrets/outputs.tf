@@ -17,3 +17,7 @@ output "seatgeek_client_id_secret_arn" {
 output "seatgeek_client_secret_secret_arn" {
   value = aws_secretsmanager_secret.seatgeek_client_secret.arn
 }
+
+output "scrapfly_api_key_secret_arn" {
+  value = aws_secretsmanager_secret.scrapfly_api_key.arn
+}

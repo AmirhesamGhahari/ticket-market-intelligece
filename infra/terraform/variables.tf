@@ -16,6 +16,12 @@ variable "apify_api_token" {
   sensitive   = true
 }
 
+variable "scrapfly_api_key" {
+  description = "Scrapfly API key for the StubHub scraper"
+  type        = string
+  sensitive   = true
+}
+
 variable "gemini_api_key" {
   description = "Google Gemini API key for LLM classification"
   type        = string

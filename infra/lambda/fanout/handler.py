@@ -21,6 +21,7 @@ def lambda_handler(event, context):
     #   "from-facebook-new"        — new futurafree FB scrape + classify (run-facebook-new from-config)
     #   "classify-facebook-new"    — new FB classify only
     #   "from-seatgeek"            — SeatGeek price snapshot
+    #   "from-stubhub"             — StubHub price snapshot (run-stubhub from-config)
     # mode:  "initial" | "periodic" (default "periodic")
     # stage: "scrape" | "classify" | "all" (default "all", applies to facebook sources)
     target_config = event.get("config_name")
@@ -79,6 +80,10 @@ def lambda_handler(event, context):
         for cfg in configs:
             _launch(cfg, ["run-seatgeek", "from-api", "--config", cfg, "--mode", mode])
 
+    elif command == "from-stubhub":
+        for cfg in configs:
+            _launch(cfg, ["run-stubhub", "from-config", "--config", cfg])
+
     else:
         # Scheduled full run — fan out all pipelines for all events.
         # Each CLI exits early if its source is disabled in the event config.
@@ -86,5 +91,6 @@ def lambda_handler(event, context):
             _launch(cfg, ["run-facebook-legacy", "from-apify", "--config", cfg, "--mode", mode, "--stage", stage])
             _launch(cfg, ["run-facebook-new", "from-config", "--config", cfg, "--mode", mode, "--stage", stage])
             _launch(cfg, ["run-seatgeek", "from-api", "--config", cfg, "--mode", mode])
+            _launch(cfg, ["run-stubhub", "from-config", "--config", cfg])
 
     return {"launched": len(results), "results": results}

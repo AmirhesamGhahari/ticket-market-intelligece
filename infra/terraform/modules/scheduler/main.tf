@@ -145,6 +145,27 @@ resource "aws_scheduler_schedule" "facebook_new_periodic" {
   }
 }
 
+# StubHub — once daily at 01:00 UTC
+# Disabled by default — enable manually in the AWS console when ready.
+resource "aws_scheduler_schedule" "stubhub_daily" {
+  name       = "${var.app_name}-stubhub-daily"
+  group_name = "default"
+  state      = "DISABLED"
+
+  flexible_time_window {
+    mode = "OFF"
+  }
+
+  schedule_expression          = "cron(0 1 * * ? *)"
+  schedule_expression_timezone = "UTC"
+
+  target {
+    arn      = aws_lambda_function.fanout.arn
+    role_arn = aws_iam_role.scheduler.arn
+    input    = jsonencode({ command = "from-stubhub" })
+  }
+}
+
 # SeatGeek — every 8 hours, first run at 02:00 UTC (02:00, 10:00, 18:00)
 # Disabled by default — enable manually in the AWS console when ready.
 resource "aws_scheduler_schedule" "seatgeek_periodic" {

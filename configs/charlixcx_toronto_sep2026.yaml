@@ -62,4 +62,3 @@ sources:
   stubhub:
     enabled: false
     event_url: null
-    max_listings: 9999

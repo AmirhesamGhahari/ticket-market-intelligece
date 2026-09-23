@@ -14,7 +14,6 @@ SCRAPFLY_URL = "https://api.scrapfly.io/scrape"
 def scrape_event(
     api_key: str,
     event_url: str,
-    max_listings: int = 200,
 ) -> list[dict]:
     """Scrape all ticket listings for one StubHub event.
 
@@ -24,6 +23,9 @@ def scrape_event(
     Phase 2: POST to the same URL with Method=IndexShGridOnly for each
     subsequent page, using the same Scrapfly session (sticky proxy) so
     DataDome cookies from phase 1 are carried forward.
+
+    Pagination stops when two consecutive pages return zero items, which
+    signals the end of real-time inventory regardless of the total count field.
     """
     session_id = f"stubhub_{secrets.token_hex(4)}"
 
@@ -33,12 +35,19 @@ def scrape_event(
 
     grid = _extract_grid(html)
     all_items: list[dict] = list(grid.get("items", []))
-    total = int(grid.get("totalListingsCount", 0))
+
+    # totalFilteredListings is the real-time count; totalListingsCount can be stale
+    total = int(
+        grid.get("totalFilteredListings")
+        or grid.get("totalCount")
+        or grid.get("totalListingsCount", 0)
+    )
     logger.info(f"[StubHub] {total} total listings, got first {len(all_items)} from HTML")
 
-    pages_needed = math.ceil(min(total, max_listings) / 10)
+    pages_needed = math.ceil(total / 10) if total > 0 else 0
 
     # ── Phase 2: POST pages 2..N ──────────────────────────────────────────────
+    consecutive_empty = 0
     for page in range(2, pages_needed + 1):
         logger.info(f"[StubHub] POST page {page}/{pages_needed}")
         body = json.dumps({
@@ -57,7 +66,12 @@ def scrape_event(
             items = data.get("items") or data.get("grid", {}).get("items", [])
             logger.info(f"[StubHub] Page {page}: got {len(items)} items")
             if not items:
-                logger.warning(f"[StubHub] Page {page}: empty items — snippet: {content[:300]}")
+                consecutive_empty += 1
+                if consecutive_empty >= 2:
+                    logger.info("[StubHub] 2 consecutive empty pages, end of listings")
+                    break
+                continue
+            consecutive_empty = 0
             all_items.extend(items)
         except json.JSONDecodeError as exc:
             logger.warning(f"[StubHub] Page {page} JSON parse failed: {exc} — snippet: {content[:300]}")
@@ -66,11 +80,8 @@ def scrape_event(
             logger.warning(f"[StubHub] Page {page} failed: {exc} — skipping")
             continue
 
-        if len(all_items) >= max_listings:
-            break
-
     logger.info(f"[StubHub] Scraped {len(all_items)} listings total")
-    return all_items[:max_listings]
+    return all_items
 
 
 # ── Scrapfly helpers ───────────────────────────────────────────────────────────

@@ -108,14 +108,12 @@ def from_config(config_name: str) -> None:
 
     event_id = _resolve_event(config)
     event_url = sh_config["event_url"]
-    max_listings = sh_config.get("max_listings", 9999)
 
     logger.info(f"[StubHub] Scraping {event_url!r}")
     t0 = time.monotonic()
     items = scrape_event(
         api_key=settings.scrapfly_api_key,
         event_url=event_url,
-        max_listings=max_listings,
     )
     logger.info(f"[StubHub] Scrape done: {len(items)} items in {time.monotonic() - t0:.1f}s")
 

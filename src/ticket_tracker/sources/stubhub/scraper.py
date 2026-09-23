@@ -18,8 +18,8 @@ def scrape_event(
 ) -> list[dict]:
     """Scrape all ticket listings for one StubHub event.
 
-    Phase 1: GET the event page (render_js=False) to extract the first batch
-    of listings from the index-data script tag and get the total count.
+    Phase 1: GET the event page via Scrapfly unblocker to extract the first
+    batch of listings from the embedded JSON script tag and get the total count.
 
     Phase 2: POST to the same URL with Method=IndexShGridOnly for each
     subsequent page, using the same Scrapfly session (sticky proxy) so
@@ -55,12 +55,12 @@ def scrape_event(
             data = json.loads(content)
             # IndexShGridOnly returns items at root; HTML page wraps them under "grid"
             items = data.get("items") or data.get("grid", {}).get("items", [])
-            logger.info(f"[StubHub] Page {page}: got {len(items)} items (response keys: {list(data.keys())})")
+            logger.info(f"[StubHub] Page {page}: got {len(items)} items")
             if not items:
-                logger.warning(f"[StubHub] Page {page}: empty items — response snippet: {content[:300]}")
+                logger.warning(f"[StubHub] Page {page}: empty items — snippet: {content[:300]}")
             all_items.extend(items)
         except json.JSONDecodeError as exc:
-            logger.warning(f"[StubHub] Page {page} JSON parse failed: {exc} — content snippet: {content[:300] if 'content' in dir() else 'N/A'}")
+            logger.warning(f"[StubHub] Page {page} JSON parse failed: {exc} — snippet: {content[:300]}")
             continue
         except Exception as exc:
             logger.warning(f"[StubHub] Page {page} failed: {exc} — skipping")
@@ -81,10 +81,8 @@ def _base_params(api_key: str, url: str, session_id: str) -> dict:
         "key": api_key,
         "url": url,
         "unblocker": "true",
-        "render_js": "false",
         "retry": "false",
         "session": session_id,
-        "proxy_pool": "public_datacenter_pool",
         "country": "us",
         "timeout": "75000",
     }

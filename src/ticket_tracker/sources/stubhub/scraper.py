@@ -83,6 +83,7 @@ def _base_params(api_key: str, url: str, session_id: str) -> dict:
         "unblocker": "true",
         "retry": "false",
         "session": session_id,
+        "proxy_pool": "public_residential_pool",
         "country": "us",
         "timeout": "75000",
     }

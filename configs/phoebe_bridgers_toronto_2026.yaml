@@ -1,6 +1,13 @@
-event_key: "phoebe_bridgers_toronto_oct1_2026"
-event_name: "Phoebe Bridgers Toronto October 1 2026"
-event_date: "2026-10-01"
+event_key: "phoebe_bridgers_toronto_2026"
+event_name: "Phoebe Bridgers Toronto 2026"
+event_date: "2026-10-01"  # primary date for events table (earliest show)
+
+# Multi-date: one StubHub task per entry; FB runs once for both nights.
+event_dates:
+  - date: "2026-10-01"
+    stubhub_url: "https://www.stubhub.com/phoebe-bridgers-toronto-tickets-10-1-2026/event/161301918/?&quantity=0"
+  - date: "2026-10-02"
+    stubhub_url: "https://www.stubhub.com/phoebe-bridgers-toronto-tickets-10-2-2026/event/161321557/?quantity=0"
 
 sources:
 
@@ -18,6 +25,7 @@ sources:
       - "phoebe bridgers toronto"
       - "phoebe bridgers october"
       - "phoebe bridgers oct 1"
+      - "phoebe bridgers oct 2"
     initial_run:
       cities:
         - "Toronto, Ontario"
@@ -49,6 +57,7 @@ sources:
       - "phoebe bridgers toronto"
       - "phoebe bridgers october"
       - "phoebe bridgers oct 1"
+      - "phoebe bridgers oct 2"
     initial_run:
       listings_per_search: 300
       days_listed: 30
@@ -64,4 +73,6 @@ sources:
 
   stubhub:
     enabled: false
-    event_url: https://www.stubhub.com/phoebe-bridgers-toronto-tickets-10-1-2026/event/161301918/?&quantity=0
+    # event_url is not used here — URLs come from event_dates list above.
+    # To enable StubHub for Phoebe, set enabled: true.
+    # The CLI will be called with --date 2026-10-01 and --date 2026-10-02 separately.

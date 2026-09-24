@@ -34,7 +34,7 @@ html_data/
 .claude/
 
 #documentation
-documentation?
+documentation/
 
 # Terraform
 infra/terraform/.terraform/

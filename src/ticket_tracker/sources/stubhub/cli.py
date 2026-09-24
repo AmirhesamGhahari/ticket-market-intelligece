@@ -20,6 +20,7 @@ from sqlalchemy import text
 
 from ticket_tracker.config import settings
 from ticket_tracker.db.engine import SessionLocal
+from ticket_tracker.sfn import report_failure, report_success
 from ticket_tracker.sources.stubhub.scraper import scrape_event
 from ticket_tracker.sources.stubhub.stage1 import run_from_items, PipelineResult
 
@@ -56,8 +57,8 @@ def _resolve_event(config: dict) -> uuid.UUID:
                 ON CONFLICT (event_key) DO NOTHING
             """),
             {
-                "id": str(uuid.uuid4()),
-                "event_key": config["event_key"],
+                "id":         str(uuid.uuid4()),
+                "event_key":  config["event_key"],
                 "event_name": config["event_name"],
             },
         )
@@ -94,39 +95,59 @@ def cli() -> None:
 
 @cli.command("from-config")
 @click.option("--config", "-c", "config_name", required=True)
-def from_config(config_name: str) -> None:
+@click.option("--date", "show_date", default=None,
+              help="Show date (YYYY-MM-DD) for multi-date events. Selects the matching stubhub_url from event_dates in the YAML.")
+def from_config(config_name: str, show_date: str) -> None:
     """Scrape StubHub listings and load to stubhub.listing_raw."""
     console.print()
     total_start = time.monotonic()
 
-    config = _load_config(config_name)
-    sh_config = config.get("sources", {}).get("stubhub", {})
+    try:
+        config    = _load_config(config_name)
+        sh_config = config.get("sources", {}).get("stubhub", {})
 
-    if not sh_config.get("enabled", False):
-        console.print("[yellow]stubhub source is disabled in this config.[/yellow]")
-        return
+        if not sh_config.get("enabled", False):
+            console.print("[yellow]stubhub source is disabled in this config.[/yellow]")
+            report_success({"new_count": 0, "updated_count": 0, "skipped_count": 0, "error_count": 0})
+            return
 
-    event_id = _resolve_event(config)
-    event_url = sh_config["event_url"]
+        event_id = _resolve_event(config)
 
-    logger.info(f"[StubHub] Scraping {event_url!r}")
-    t0 = time.monotonic()
-    items = scrape_event(
-        api_key=settings.scrapfly_api_key,
-        event_url=event_url,
-    )
-    logger.info(f"[StubHub] Scrape done: {len(items)} items in {time.monotonic() - t0:.1f}s")
+        # Multi-date: --date selects the URL from the event_dates list in YAML.
+        # Single-date (no --date): fall back to sources.stubhub.event_url.
+        if show_date:
+            event_dates = config.get("event_dates", [])
+            match = next((e for e in event_dates if e.get("date") == show_date), None)
+            if match is None:
+                raise click.BadParameter(
+                    f"No entry for date {show_date!r} in event_dates list", param_hint="'--date'"
+                )
+            event_url = match["stubhub_url"]
+        else:
+            event_url = sh_config["event_url"]
 
-    t0 = time.monotonic()
-    result = run_from_items(
-        items,
-        source=config_name,
-        event_id=event_id,
-        event_key=config["event_key"],
-    )
-    _print_result("StubHub — Stage 1", result, time.monotonic() - t0)
-    console.print(Rule(f"[dim]Done in {time.monotonic() - total_start:.1f}s[/dim]"))
-    console.print()
+        logger.info(f"[StubHub] Scraping {event_url!r} (show_date={show_date})")
+        t0    = time.monotonic()
+        items = scrape_event(api_key=settings.scrapfly_api_key, event_url=event_url)
+        logger.info(f"[StubHub] Scrape done: {len(items)} items in {time.monotonic() - t0:.1f}s")
+
+        t0     = time.monotonic()
+        result = run_from_items(items, source=config_name, event_id=event_id,
+                                event_key=config["event_key"], show_date=show_date)
+        _print_result("StubHub — Stage 1", result, time.monotonic() - t0)
+
+        report_success({
+            "new_count":     result.newly_added,
+            "updated_count": result.change_added,
+            "skipped_count": result.skipped,
+            "error_count":   result.errors,
+        })
+        console.print(Rule(f"[dim]Done in {time.monotonic() - total_start:.1f}s[/dim]"))
+        console.print()
+
+    except Exception as exc:
+        report_failure(type(exc).__name__, str(exc))
+        raise
 
 
 if __name__ == "__main__":

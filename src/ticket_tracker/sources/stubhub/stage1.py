@@ -205,7 +205,6 @@ def _create_run(
     source: str,
     event_key: str,
     event_id: uuid.UUID,
-    mode: str,
     show_date: Optional[str] = None,
 ) -> PipelineRun:
     from datetime import date as _date
@@ -221,7 +220,6 @@ def _create_run(
         source_type="stubhub",
         event_key=event_key,
         event_id=event_id,
-        mode=mode,
         show_date=parsed_show_date,
         status="running",
     )
@@ -250,13 +248,12 @@ def run_from_items(
     source: str,
     event_id: uuid.UUID,
     event_key: str,
-    mode: str = "periodic",
     show_date: Optional[str] = None,
 ) -> PipelineResult:
-    logger.info(f"[StubHub Stage1] Starting — source: {source} mode: {mode} show_date: {show_date} ({len(items)} items)")
+    logger.info(f"[StubHub Stage1] Starting — source: {source} show_date: {show_date} ({len(items)} items)")
 
     with SessionLocal() as session:
-        db_run = _create_run(session, source, event_key, event_id, mode, show_date=show_date)
+        db_run = _create_run(session, source, event_key, event_id, show_date=show_date)
         result = PipelineResult(run_id=db_run.id, status="completed")
         _process_records(session, db_run, items, result, event_id, event_key)
         _finish_run(session, db_run, result)

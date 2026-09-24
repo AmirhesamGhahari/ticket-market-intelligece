@@ -152,8 +152,22 @@ def _build_params(record: dict, run_id: uuid.UUID, event_id: uuid.UUID, event_ke
 # ── Pipeline run helpers ──────────────────────────────────────────────────────
 
 
-def _create_run(session: Session, source: str) -> PipelineRun:
-    run = PipelineRun(stage="stage1_facebook", source=source, status="running")
+def _create_run(
+    session: Session,
+    source: str,
+    event_key: str,
+    event_id: uuid.UUID,
+    mode: str,
+) -> PipelineRun:
+    run = PipelineRun(
+        stage="stage1_facebook",
+        source=source,
+        source_type="facebook_legacy",
+        event_key=event_key,
+        event_id=event_id,
+        mode=mode,
+        status="running",
+    )
     session.add(run)
     session.commit()
     session.refresh(run)
@@ -222,7 +236,7 @@ def run(file_path: Path, event_id: uuid.UUID, event_key: str) -> PipelineResult:
     logger.info(f"[FB Stage 1] Starting — source: {file_path.name}")
 
     with SessionLocal() as session:
-        db_run = _create_run(session, file_path.name)
+        db_run = _create_run(session, file_path.name, event_key, event_id, mode="initial")
         result = PipelineResult(run_id=db_run.id, status="completed")
 
         try:
@@ -251,12 +265,18 @@ def run(file_path: Path, event_id: uuid.UUID, event_key: str) -> PipelineResult:
     return result
 
 
-def run_from_records(records: list[dict], source: str, event_id: uuid.UUID, event_key: str) -> PipelineResult:
+def run_from_records(
+    records: list[dict],
+    source: str,
+    event_id: uuid.UUID,
+    event_key: str,
+    mode: str = "periodic",
+) -> PipelineResult:
     """Run Stage 1 from records returned by ApifyRunner (live run)."""
-    logger.info(f"[FB Stage 1] Starting — source: {source} ({len(records)} records)")
+    logger.info(f"[FB Stage 1] Starting — source: {source} mode: {mode} ({len(records)} records)")
 
     with SessionLocal() as session:
-        db_run = _create_run(session, source)
+        db_run = _create_run(session, source, event_key, event_id, mode)
         result = PipelineResult(run_id=db_run.id, status="completed")
         _process_records(session, db_run, records, result, event_id, event_key)
         _finish_run(session, db_run, result)

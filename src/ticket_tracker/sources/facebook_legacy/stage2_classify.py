@@ -81,7 +81,7 @@ def run(event_id: Optional[uuid.UUID] = None, event_key: Optional[str] = None) -
     Failed batches are retried on the next run.
     """
     with SessionLocal() as session:
-        db_run = _create_run(session, event_key)
+        db_run = _create_run(session, event_key, event_id=event_id)
         result = ClassifyResult(run_id=db_run.id, status="completed")
 
         if event_id:
@@ -173,10 +173,17 @@ def run(event_id: Optional[uuid.UUID] = None, event_key: Optional[str] = None) -
     return result
 
 
-def _create_run(session: Session, event_key: Optional[str]) -> PipelineRun:
+def _create_run(
+    session: Session,
+    event_key: Optional[str],
+    event_id: Optional[uuid.UUID] = None,
+) -> PipelineRun:
     run = PipelineRun(
         stage="stage2",
         source=event_key if event_key else "all",
+        source_type="facebook_legacy",
+        event_key=event_key,
+        event_id=event_id,
         status="running",
     )
     session.add(run)

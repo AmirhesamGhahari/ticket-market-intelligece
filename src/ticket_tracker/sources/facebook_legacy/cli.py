@@ -26,6 +26,7 @@ from sqlalchemy import text
 
 from ticket_tracker.config import settings
 from ticket_tracker.db.engine import SessionLocal
+from ticket_tracker.sfn import report_failure, report_success
 from ticket_tracker.sources.facebook_legacy.scraper import ApifyRunner
 from ticket_tracker.sources.facebook_legacy.stage1 import run as run_stage1
 from ticket_tracker.sources.facebook_legacy.stage1 import run_from_records as run_stage1_from_records
@@ -184,37 +185,54 @@ def from_apify(config_name: str, mode: str, stage: str) -> None:
     console.print()
     total_start = time.monotonic()
 
-    config = _load_config(config_name)
-    legacy_cfg = config.get("sources", {}).get("facebook_legacy", {})
+    result1 = None
+    result2 = None
 
-    if not legacy_cfg.get("enabled", False):
-        console.print(f"[yellow]facebook_legacy is disabled for {config_name!r} — skipping.[/yellow]")
-        return
+    try:
+        config     = _load_config(config_name)
+        legacy_cfg = config.get("sources", {}).get("facebook_legacy", {})
 
-    event_id = _resolve_event(config)
+        if not legacy_cfg.get("enabled", False):
+            console.print(f"[yellow]facebook_legacy is disabled for {config_name!r} — skipping.[/yellow]")
+            report_success({"new_count": 0, "updated_count": 0, "skipped_count": 0, "error_count": 0, "classified_count": 0})
+            return
 
-    if stage in ("scrape", "all"):
-        run_inputs = _build_run_inputs(config, mode)
-        runner = ApifyRunner(settings.apify_api_token, legacy_cfg["actor_id"])
+        event_id = _resolve_event(config)
 
-        all_records: list[dict] = []
-        for run_input in run_inputs:
-            city = run_input["location"]
-            logger.info(f"[Apify] Fetching city: {city!r}")
-            all_records.extend(runner.run(run_input))
+        if stage in ("scrape", "all"):
+            run_inputs = _build_run_inputs(config, mode)
+            runner     = ApifyRunner(settings.apify_api_token, legacy_cfg["actor_id"])
 
-        source_label = f"{config_name}:{mode}"
-        t0 = time.monotonic()
-        result1 = run_stage1_from_records(all_records, source=source_label, event_id=event_id, event_key=config["event_key"])
-        _print_scrape_result("STAGE 1 — Fetch & Extract", result1, time.monotonic() - t0)
+            all_records: list[dict] = []
+            for run_input in run_inputs:
+                city = run_input["location"]
+                logger.info(f"[Apify] Fetching city: {city!r}")
+                all_records.extend(runner.run(run_input))
 
-    if stage in ("classify", "all"):
-        t0 = time.monotonic()
-        result2 = run_classify(event_id=event_id, event_key=config["event_key"])
-        _print_classify_result("STAGE 2 — LLM Classify", result2, time.monotonic() - t0)
+            source_label = f"{config_name}:{mode}"
+            t0      = time.monotonic()
+            result1 = run_stage1_from_records(all_records, source=source_label,
+                                              event_id=event_id, event_key=config["event_key"], mode=mode)
+            _print_scrape_result("STAGE 1 — Fetch & Extract", result1, time.monotonic() - t0)
 
-    console.print(Rule(f"[dim]Done in {time.monotonic() - total_start:.1f}s[/dim]"))
-    console.print()
+        if stage in ("classify", "all"):
+            t0      = time.monotonic()
+            result2 = run_classify(event_id=event_id, event_key=config["event_key"])
+            _print_classify_result("STAGE 2 — LLM Classify", result2, time.monotonic() - t0)
+
+        report_success({
+            "new_count":        result1.newly_added  if result1 else 0,
+            "updated_count":    result1.change_added if result1 else 0,
+            "skipped_count":    result1.skipped      if result1 else 0,
+            "error_count":      result1.errors       if result1 else 0,
+            "classified_count": result2.classified   if result2 else 0,
+        })
+        console.print(Rule(f"[dim]Done in {time.monotonic() - total_start:.1f}s[/dim]"))
+        console.print()
+
+    except Exception as exc:
+        report_failure(type(exc).__name__, str(exc))
+        raise
 
 
 # ── from-file ─────────────────────────────────────────────────────────────────

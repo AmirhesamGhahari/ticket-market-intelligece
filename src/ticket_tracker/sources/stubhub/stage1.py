@@ -200,8 +200,31 @@ def _process_records(
 # ── Pipeline run helpers ───────────────────────────────────────────────────────
 
 
-def _create_run(session: Session, source: str) -> PipelineRun:
-    run = PipelineRun(stage="stage1_stubhub", source=source, status="running")
+def _create_run(
+    session: Session,
+    source: str,
+    event_key: str,
+    event_id: uuid.UUID,
+    mode: str,
+    show_date: Optional[str] = None,
+) -> PipelineRun:
+    from datetime import date as _date
+    parsed_show_date = None
+    if show_date:
+        try:
+            parsed_show_date = _date.fromisoformat(show_date)
+        except ValueError:
+            pass
+    run = PipelineRun(
+        stage="stage1_stubhub",
+        source=source,
+        source_type="stubhub",
+        event_key=event_key,
+        event_id=event_id,
+        mode=mode,
+        show_date=parsed_show_date,
+        status="running",
+    )
     session.add(run)
     session.commit()
     session.refresh(run)
@@ -227,11 +250,13 @@ def run_from_items(
     source: str,
     event_id: uuid.UUID,
     event_key: str,
+    mode: str = "periodic",
+    show_date: Optional[str] = None,
 ) -> PipelineResult:
-    logger.info(f"[StubHub Stage1] Starting — source: {source} ({len(items)} items)")
+    logger.info(f"[StubHub Stage1] Starting — source: {source} mode: {mode} show_date: {show_date} ({len(items)} items)")
 
     with SessionLocal() as session:
-        db_run = _create_run(session, source)
+        db_run = _create_run(session, source, event_key, event_id, mode, show_date=show_date)
         result = PipelineResult(run_id=db_run.id, status="completed")
         _process_records(session, db_run, items, result, event_id, event_key)
         _finish_run(session, db_run, result)

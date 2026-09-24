@@ -13,10 +13,16 @@ github_owner   = "your-github-username"
 github_repo    = "ticket-tracker"
 github_branch  = "main"
 
-# All event config names in configs/ — a single list for all pipelines.
+# All event configs — name (YAML file without .yaml) + event_dates (list of YYYY-MM-DD).
+# Single-date events use a one-item list.  Multi-date events list every show date.
+# The Lambda uses event_dates to skip past events, scale scrape frequency, and
+# generate one StubHub ECS task per upcoming show date.
 # Each pipeline CLI checks sources.<pipeline>.enabled in the YAML and skips if false.
 # event_configs = [
-#   "veld_2026",
-#   "charlixcx_toronto_sep2026",
-#   "olivia_rodrigo_toronto_oct2026",
+#   { name = "jonas_brothers_toronto_sep2026",  event_dates = ["2026-09-28"] },
+#   { name = "phoebe_bridgers_toronto_2026",    event_dates = ["2026-10-01", "2026-10-02"] },
+#   { name = "gorillaz_toronto_oct2026",         event_dates = ["2026-10-04"] },
+#   { name = "beabadoobee_toronto_oct2026",      event_dates = ["2026-10-07"] },
+#   { name = "monsta_x_toronto_oct2026",         event_dates = ["2026-10-10"] },
+#   { name = "olivia_rodrigo_toronto_oct2026",   event_dates = ["2026-10-26"] },
 # ]

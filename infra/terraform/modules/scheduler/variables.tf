@@ -23,8 +23,11 @@ variable "ecs_task_sg_id" {
 }
 
 variable "event_configs" {
-  description = "Config names (YAML in configs/) for all pipelines — each CLI skips if its source is disabled in the config"
-  type        = list(string)
+  description = "Event config objects. Each entry has 'name' (YAML filename without .yaml) and 'event_dates' (list of YYYY-MM-DD). Single-date events have a one-item list. The Lambda uses event_dates for frequency checks and StubHub task generation; ECS CLIs read the full YAML from disk."
+  type = list(object({
+    name        = string
+    event_dates = list(string)
+  }))
 }
 
 variable "lambda_source_dir" {

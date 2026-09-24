@@ -11,9 +11,16 @@ variable "ecs_cluster_arn" {
 }
 
 variable "lambda_function_name" {
-  type = string
+  description = "Plan-builder Lambda function name (alarms on Lambda errors prevent Step Functions from receiving a run plan)"
+  type        = string
+}
+
+variable "sfn_state_machine_arn" {
+  description = "Step Functions dispatcher state machine ARN — used for execution failure and timeout alarms"
+  type        = string
 }
 
 variable "log_group_name" {
-  type = string
+  description = "ECS task CloudWatch log group name — used for log metric filters"
+  type        = string
 }

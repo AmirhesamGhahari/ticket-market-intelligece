@@ -80,7 +80,10 @@ variable "github_branch" {
 }
 
 variable "event_configs" {
-  description = "Config names (YAML in configs/) for all pipelines — each CLI skips if its source is disabled in the config"
-  type        = list(string)
-  default     = []
+  description = "Event config objects — name (YAML without .yaml) + event_dates (list of YYYY-MM-DD). The Lambda uses event_dates to determine scheduling frequency and to generate one StubHub task per upcoming show date. ECS CLIs read the full YAML from disk for URLs and FB settings."
+  type = list(object({
+    name        = string
+    event_dates = list(string)
+  }))
+  default = []
 }

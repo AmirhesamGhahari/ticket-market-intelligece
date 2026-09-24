@@ -75,10 +75,11 @@ module "codepipeline" {
 }
 
 module "monitoring" {
-  source               = "./modules/monitoring"
-  app_name             = var.app_name
-  alert_email          = var.alert_email
-  ecs_cluster_arn      = module.ecs.cluster_arn
-  lambda_function_name = module.scheduler.lambda_function_name
-  log_group_name       = module.ecs.log_group_name
+  source                = "./modules/monitoring"
+  app_name              = var.app_name
+  alert_email           = var.alert_email
+  ecs_cluster_arn       = module.ecs.cluster_arn
+  lambda_function_name  = module.scheduler.lambda_function_name
+  sfn_state_machine_arn = module.scheduler.sfn_state_machine_arn
+  log_group_name        = module.ecs.log_group_name
 }

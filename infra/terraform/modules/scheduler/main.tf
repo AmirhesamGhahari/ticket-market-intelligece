@@ -119,6 +119,12 @@ resource "aws_iam_role_policy" "sfn_policy" {
         Resource = [aws_lambda_function.fanout.arn]
       },
       {
+        # .sync integration — SFN creates/manages StepFunctionsGetEventsForECSTaskRule internally
+        Effect   = "Allow"
+        Action   = ["events:PutTargets", "events:PutRule", "events:DescribeRule"]
+        Resource = ["arn:aws:events:*:*:rule/StepFunctionsGetEventsForECSTaskRule"]
+      },
+      {
         # Direct DynamoDB integration — marks mode=periodic after each successful ECS task
         Effect   = "Allow"
         Action   = ["dynamodb:UpdateItem"]
@@ -153,7 +159,7 @@ locals {
   # Input to each iteration: {"task": {"command": [...], "state_key": "...", "mode": "..."}}
   #
   # Flow:
-  #   LaunchTask (.sync:2) — SFN launches the ECS task and polls until it exits.
+  #   LaunchTask (.sync) — SFN launches the ECS task and waits via EventBridge until it exits.
   #     Exit code 0 = success → SetModePeriodic.
   #     Timeout (1h) or non-zero exit → Catch → Done (skip, try next item).
   #
@@ -166,7 +172,7 @@ locals {
     States = {
       LaunchTask = {
         Type           = "Task"
-        Resource       = "arn:aws:states:::ecs:runTask.sync:2"
+        Resource       = "arn:aws:states:::ecs:runTask.sync"
         TimeoutSeconds = 3600
         Parameters = {
           LaunchType     = "FARGATE"

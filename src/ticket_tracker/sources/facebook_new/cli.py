@@ -139,52 +139,48 @@ def from_config(config_name: str, mode: str, stage: str) -> None:
     scrape_result   = None
     classify_result = None
 
-    try:
-        config    = _load_config(config_name)
-        fb_config = config.get("sources", {}).get("facebook_new", {})
+    config    = _load_config(config_name)
+    fb_config = config.get("sources", {}).get("facebook_new", {})
 
-        if not fb_config.get("enabled", False):
-            console.print(f"[yellow]facebook_new is disabled for {config_name!r} — skipping.[/yellow]")
-            return
+    if not fb_config.get("enabled", False):
+        console.print(f"[yellow]facebook_new is disabled for {config_name!r} — skipping.[/yellow]")
+        return
 
-        event_id = _resolve_event(config)
+    event_id = _resolve_event(config)
 
-        if stage in ("scrape", "all"):
-            mode_cfg = fb_config[f"{mode}_run"]
-            runner   = FuturafreeRunner(settings.apify_api_token, fb_config["actor_id"])
+    if stage in ("scrape", "all"):
+        mode_cfg = fb_config[f"{mode}_run"]
+        runner   = FuturafreeRunner(settings.apify_api_token, fb_config["actor_id"])
 
-            all_records: list[dict] = []
-            for term in fb_config["search_terms"]:
-                run_input = build_run_input(
-                    search_terms=[term],
-                    latitude=str(fb_config["latitude"]),
-                    longitude=str(fb_config["longitude"]),
-                    min_price=str(fb_config.get("min_price", "0")),
-                    max_price=str(fb_config.get("max_price", "10000")),
-                    days_listed=int(mode_cfg["days_listed"]),
-                    listings_per_search=int(mode_cfg["listings_per_search"]),
-                    search_radius_km=fb_config.get("search_radius_km"),
-                    use_deduplication=bool(mode_cfg.get("use_deduplication", False)),
-                    filter_keywords=fb_config.get("filter_keywords") or None,
-                )
-                logger.info(f"[FB-New] {config_name!r} mode={mode!r} term={term!r}")
-                all_records.extend(runner.run(run_input))
+        all_records: list[dict] = []
+        for term in fb_config["search_terms"]:
+            run_input = build_run_input(
+                search_terms=[term],
+                latitude=str(fb_config["latitude"]),
+                longitude=str(fb_config["longitude"]),
+                min_price=str(fb_config.get("min_price", "0")),
+                max_price=str(fb_config.get("max_price", "10000")),
+                days_listed=int(mode_cfg["days_listed"]),
+                listings_per_search=int(mode_cfg["listings_per_search"]),
+                search_radius_km=fb_config.get("search_radius_km"),
+                use_deduplication=bool(mode_cfg.get("use_deduplication", False)),
+                filter_keywords=fb_config.get("filter_keywords") or None,
+            )
+            logger.info(f"[FB-New] {config_name!r} mode={mode!r} term={term!r}")
+            all_records.extend(runner.run(run_input))
 
-            t0            = time.monotonic()
-            scrape_result = run_from_records(all_records, source=f"{config_name}:{mode}",
-                                             event_id=event_id, event_key=config["event_key"], mode=mode)
-            _print_scrape_result("FB Marketplace — Stage 1 (Scrape)", scrape_result, time.monotonic() - t0)
+        t0            = time.monotonic()
+        scrape_result = run_from_records(all_records, source=f"{config_name}:{mode}",
+                                         event_id=event_id, event_key=config["event_key"], mode=mode)
+        _print_scrape_result("FB Marketplace — Stage 1 (Scrape)", scrape_result, time.monotonic() - t0)
 
-        if stage in ("classify", "all"):
-            t0              = time.monotonic()
-            classify_result = run_classify(event_id=event_id, event_key=config["event_key"])
-            _print_classify_result("FB Marketplace — Stage 2 (Classify)", classify_result, time.monotonic() - t0)
+    if stage in ("classify", "all"):
+        t0              = time.monotonic()
+        classify_result = run_classify(event_id=event_id, event_key=config["event_key"])
+        _print_classify_result("FB Marketplace — Stage 2 (Classify)", classify_result, time.monotonic() - t0)
 
-        console.print(Rule(f"[dim]Done in {time.monotonic() - total_start:.1f}s[/dim]"))
-        console.print()
-
-    except Exception as exc:
-        raise
+    console.print(Rule(f"[dim]Done in {time.monotonic() - total_start:.1f}s[/dim]"))
+    console.print()
 
 
 @cli.command("classify")

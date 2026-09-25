@@ -187,42 +187,38 @@ def from_apify(config_name: str, mode: str, stage: str) -> None:
     result1 = None
     result2 = None
 
-    try:
-        config     = _load_config(config_name)
-        legacy_cfg = config.get("sources", {}).get("facebook_legacy", {})
+    config     = _load_config(config_name)
+    legacy_cfg = config.get("sources", {}).get("facebook_legacy", {})
 
-        if not legacy_cfg.get("enabled", False):
-            console.print(f"[yellow]facebook_legacy is disabled for {config_name!r} — skipping.[/yellow]")
-            return
+    if not legacy_cfg.get("enabled", False):
+        console.print(f"[yellow]facebook_legacy is disabled for {config_name!r} — skipping.[/yellow]")
+        return
 
-        event_id = _resolve_event(config)
+    event_id = _resolve_event(config)
 
-        if stage in ("scrape", "all"):
-            run_inputs = _build_run_inputs(config, mode)
-            runner     = ApifyRunner(settings.apify_api_token, legacy_cfg["actor_id"])
+    if stage in ("scrape", "all"):
+        run_inputs = _build_run_inputs(config, mode)
+        runner     = ApifyRunner(settings.apify_api_token, legacy_cfg["actor_id"])
 
-            all_records: list[dict] = []
-            for run_input in run_inputs:
-                city = run_input["location"]
-                logger.info(f"[Apify] Fetching city: {city!r}")
-                all_records.extend(runner.run(run_input))
+        all_records: list[dict] = []
+        for run_input in run_inputs:
+            city = run_input["location"]
+            logger.info(f"[Apify] Fetching city: {city!r}")
+            all_records.extend(runner.run(run_input))
 
-            source_label = f"{config_name}:{mode}"
-            t0      = time.monotonic()
-            result1 = run_stage1_from_records(all_records, source=source_label,
-                                              event_id=event_id, event_key=config["event_key"], mode=mode)
-            _print_scrape_result("STAGE 1 — Fetch & Extract", result1, time.monotonic() - t0)
+        source_label = f"{config_name}:{mode}"
+        t0      = time.monotonic()
+        result1 = run_stage1_from_records(all_records, source=source_label,
+                                          event_id=event_id, event_key=config["event_key"], mode=mode)
+        _print_scrape_result("STAGE 1 — Fetch & Extract", result1, time.monotonic() - t0)
 
-        if stage in ("classify", "all"):
-            t0      = time.monotonic()
-            result2 = run_classify(event_id=event_id, event_key=config["event_key"])
-            _print_classify_result("STAGE 2 — LLM Classify", result2, time.monotonic() - t0)
+    if stage in ("classify", "all"):
+        t0      = time.monotonic()
+        result2 = run_classify(event_id=event_id, event_key=config["event_key"])
+        _print_classify_result("STAGE 2 — LLM Classify", result2, time.monotonic() - t0)
 
-        console.print(Rule(f"[dim]Done in {time.monotonic() - total_start:.1f}s[/dim]"))
-        console.print()
-
-    except Exception as exc:
-        raise
+    console.print(Rule(f"[dim]Done in {time.monotonic() - total_start:.1f}s[/dim]"))
+    console.print()
 
 
 # ── from-file ─────────────────────────────────────────────────────────────────

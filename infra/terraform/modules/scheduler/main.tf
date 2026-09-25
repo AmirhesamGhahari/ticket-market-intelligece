@@ -154,75 +154,114 @@ locals {
     BackoffRate     = 2
   }]
 
-  # Shared Map iterator — identical for all 3 source branches.
+  # Each source branch gets its own iterator with unique state names.
+  # SFN validates state names globally across all Parallel branches and Map iterators,
+  # so sharing one iterator definition across 3 Maps causes DUPLICATE_STATE_NAME errors.
   #
-  # Input to each iteration: {"task": {"command": [...], "state_key": "...", "mode": "..."}}
-  #
-  # Flow:
-  #   LaunchTask (.sync) — SFN launches the ECS task and waits via EventBridge until it exits.
-  #     Exit code 0 = success → SetModePeriodic.
-  #     Timeout (1h) or non-zero exit → Catch → Done (skip, try next item).
-  #
-  #   SetModePeriodic — direct DynamoDB UpdateItem, no Lambda needed.
-  #     Sets mode = "periodic" so the next execution knows the first run succeeded.
-  #
-  #   Done — terminal Pass state.
-  task_iterator = {
-    StartAt = "LaunchTask"
+  # All 3 iterators are identical in logic:
+  #   Launch  — ECS .sync: SFN runs the task and waits via EventBridge until exit.
+  #             Exit code 0 → SetPeriodic; timeout/non-zero → Catch → End (next item continues).
+  #   SetPeriodic — direct DynamoDB UpdateItem: sets mode="periodic" after first success.
+  #   End     — terminal Pass state.
+
+  _ecs_task_params = {
+    LaunchType     = "FARGATE"
+    Cluster        = var.ecs_cluster_arn
+    TaskDefinition = var.task_family
+    NetworkConfiguration = {
+      AwsvpcConfiguration = {
+        Subnets        = var.public_subnet_ids
+        SecurityGroups = [var.ecs_task_sg_id]
+        AssignPublicIp = "ENABLED"
+      }
+    }
+    Overrides = {
+      ContainerOverrides = [{
+        Name        = "pipeline"
+        "Command.$" = "$.task.command"
+      }]
+    }
+  }
+
+  _dynamo_set_periodic_params = {
+    TableName = aws_dynamodb_table.pipeline_state.name
+    Key = {
+      pk = { "S.$" = "$.task.state_key" }
+    }
+    UpdateExpression          = "SET #m = :periodic"
+    ExpressionAttributeNames  = { "#m" = "mode" }
+    ExpressionAttributeValues = { ":periodic" = { "S" = "periodic" } }
+  }
+
+  task_iterator_fl = {
+    StartAt = "LaunchFL"
     States = {
-      LaunchTask = {
+      LaunchFL = {
         Type           = "Task"
         Resource       = "arn:aws:states:::ecs:runTask.sync"
         TimeoutSeconds = 3600
-        Parameters = {
-          LaunchType     = "FARGATE"
-          Cluster        = var.ecs_cluster_arn
-          TaskDefinition = var.task_family
-          NetworkConfiguration = {
-            AwsvpcConfiguration = {
-              Subnets        = var.public_subnet_ids
-              SecurityGroups = [var.ecs_task_sg_id]
-              AssignPublicIp = "ENABLED"
-            }
-          }
-          Overrides = {
-            ContainerOverrides = [{
-              Name        = "pipeline"
-              "Command.$" = "$.task.command"
-            }]
-          }
-        }
-        ResultPath = null
-        Next       = "SetModePeriodic"
-        Catch = [{
-          ErrorEquals = ["States.ALL"]
-          ResultPath  = null
-          Next        = "Done"
-        }]
+        Parameters     = local._ecs_task_params
+        ResultPath     = null
+        Next           = "SetPeriodicFL"
+        Catch          = [{ ErrorEquals = ["States.ALL"], ResultPath = null, Next = "EndFL" }]
       }
-
-      SetModePeriodic = {
-        Type     = "Task"
-        Resource = "arn:aws:states:::dynamodb:updateItem"
-        Parameters = {
-          TableName = aws_dynamodb_table.pipeline_state.name
-          Key = {
-            pk = { "S.$" = "$.task.state_key" }
-          }
-          UpdateExpression          = "SET #m = :periodic"
-          ExpressionAttributeNames  = { "#m" = "mode" }
-          ExpressionAttributeValues = { ":periodic" = { "S" = "periodic" } }
-        }
+      SetPeriodicFL = {
+        Type       = "Task"
+        Resource   = "arn:aws:states:::dynamodb:updateItem"
+        Parameters = local._dynamo_set_periodic_params
         ResultPath = null
-        Next       = "Done"
-        Catch = [{
-          ErrorEquals = ["States.ALL"]
-          ResultPath  = null
-          Next        = "Done"
-        }]
+        Next       = "EndFL"
+        Catch      = [{ ErrorEquals = ["States.ALL"], ResultPath = null, Next = "EndFL" }]
       }
+      EndFL = { Type = "Pass", End = true }
+    }
+  }
 
-      Done = { Type = "Pass", End = true }
+  task_iterator_fn = {
+    StartAt = "LaunchFN"
+    States = {
+      LaunchFN = {
+        Type           = "Task"
+        Resource       = "arn:aws:states:::ecs:runTask.sync"
+        TimeoutSeconds = 3600
+        Parameters     = local._ecs_task_params
+        ResultPath     = null
+        Next           = "SetPeriodicFN"
+        Catch          = [{ ErrorEquals = ["States.ALL"], ResultPath = null, Next = "EndFN" }]
+      }
+      SetPeriodicFN = {
+        Type       = "Task"
+        Resource   = "arn:aws:states:::dynamodb:updateItem"
+        Parameters = local._dynamo_set_periodic_params
+        ResultPath = null
+        Next       = "EndFN"
+        Catch      = [{ ErrorEquals = ["States.ALL"], ResultPath = null, Next = "EndFN" }]
+      }
+      EndFN = { Type = "Pass", End = true }
+    }
+  }
+
+  task_iterator_sh = {
+    StartAt = "LaunchSH"
+    States = {
+      LaunchSH = {
+        Type           = "Task"
+        Resource       = "arn:aws:states:::ecs:runTask.sync"
+        TimeoutSeconds = 3600
+        Parameters     = local._ecs_task_params
+        ResultPath     = null
+        Next           = "SetPeriodicSH"
+        Catch          = [{ ErrorEquals = ["States.ALL"], ResultPath = null, Next = "EndSH" }]
+      }
+      SetPeriodicSH = {
+        Type       = "Task"
+        Resource   = "arn:aws:states:::dynamodb:updateItem"
+        Parameters = local._dynamo_set_periodic_params
+        ResultPath = null
+        Next       = "EndSH"
+        Catch      = [{ ErrorEquals = ["States.ALL"], ResultPath = null, Next = "EndSH" }]
+      }
+      EndSH = { Type = "Pass", End = true }
     }
   }
 }
@@ -288,7 +327,7 @@ resource "aws_sfn_state_machine" "dispatcher" {
                 ItemsPath      = "$.tasks.facebook_legacy"
                 MaxConcurrency = 1   # sequential — one event at a time per source
                 Parameters     = { "task.$" = "$$.Map.Item.Value" }
-                Iterator       = local.task_iterator
+                Iterator       = local.task_iterator_fl
                 End            = true
               }
             }
@@ -303,7 +342,7 @@ resource "aws_sfn_state_machine" "dispatcher" {
                 ItemsPath      = "$.tasks.facebook_new"
                 MaxConcurrency = 1
                 Parameters     = { "task.$" = "$$.Map.Item.Value" }
-                Iterator       = local.task_iterator
+                Iterator       = local.task_iterator_fn
                 End            = true
               }
             }
@@ -318,7 +357,7 @@ resource "aws_sfn_state_machine" "dispatcher" {
                 ItemsPath      = "$.tasks.stubhub"
                 MaxConcurrency = 1
                 Parameters     = { "task.$" = "$$.Map.Item.Value" }
-                Iterator       = local.task_iterator
+                Iterator       = local.task_iterator_sh
                 End            = true
               }
             }

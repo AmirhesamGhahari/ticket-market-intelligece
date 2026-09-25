@@ -1,4 +1,4 @@
-"""Facebook Marketplace (futurafree actor) — Stage 1 extract pipeline.
+"""Facebook Marketplace (datavoyantlab actor) — Stage 1 extract pipeline.
 
 Reads actor records and loads them into facebook.facebook_listings_new_raw using CDC
 (Change Data Capture) keyed on (event_id, fb_listing_id).
@@ -8,14 +8,18 @@ CDC rules:
   - Exists, no change    → skip
   - Exists, data changed → close old (valid_to=now), insert new
 
-Output schema from futurafree actor:
-  link         — listing URL
-  title        — listing title
-  price        — string like "$800"
-  location     — string like "Toronto, ON"
-  image_url    — single image URL string
-  id           — listing ID
-  sources      — [{"search_term": "...", "timeframe": "..."}]
+Output schema from datavoyantlab actor:
+  id                              — listing ID
+  marketplace_listing_title       — listing title
+  listing_price.amount            — price string like "800"
+  listing_price.currency          — currency code
+  location.reverse_geocode.city   — city name
+  location.reverse_geocode.state  — state/province name
+  is_sold                         — bool
+  is_pending                      — bool
+  is_live                         — bool
+  creation_time                   — epoch int or ISO string
+  listingUrl                      — full listing URL
 """
 from __future__ import annotations
 
@@ -50,7 +54,7 @@ class PipelineResult:
 
 
 def _parse_price(price_str: object) -> Optional[Decimal]:
-    """Parse price strings like '$800', '$1,200', '800.00' → Decimal."""
+    """Parse price strings like '800', '1,200', '800.00' → Decimal."""
     if price_str is None:
         return None
     try:
@@ -60,17 +64,14 @@ def _parse_price(price_str: object) -> Optional[Decimal]:
         return None
 
 
-def _parse_location(location_str: Optional[str]) -> tuple[Optional[str], Optional[str]]:
-    """Split 'Toronto, ON' into (city='Toronto', state='ON').
-
-    Returns (None, None) if the string is missing or unparseable.
-    """
-    if not location_str:
-        return None, None
-    parts = [p.strip() for p in location_str.split(",", 1)]
-    city = parts[0] or None
-    state = parts[1] if len(parts) > 1 else None
-    return city, state
+def _parse_creation_time(val: object) -> Optional[str]:
+    """Convert epoch int or string timestamp to ISO format."""
+    if val is None:
+        return None
+    if isinstance(val, (int, float)):
+        return datetime.fromtimestamp(int(val), tz=timezone.utc).isoformat()
+    s = str(val).strip()
+    return s or None
 
 
 # ── CDC helpers ────────────────────────────────────────────────────────────────
@@ -130,27 +131,27 @@ def _build_params(
     event_id: uuid.UUID,
     event_key: str,
 ) -> dict:
-    city, state = _parse_location(record.get("location"))
-    image_url = record.get("image_url")
+    price_obj = record.get("listing_price") or {}
+    geo = (record.get("location") or {}).get("reverse_geocode") or {}
 
     return {
         "event_id": str(event_id),
         "event_key": event_key,
         "pipeline_run_id": str(run_id),
         "fb_listing_id": str(record.get("id")),
-        "listing_url": record.get("link"),
+        "listing_url": record.get("listingUrl"),
         "seller_id": None,
         "seller_name": None,
-        "title": record.get("title"),
+        "title": record.get("marketplace_listing_title"),
         "description": None,
-        "price": _parse_price(record.get("price")),
-        "currency": "CAD",
-        "location_city": city,
-        "location_state": state,
-        "image_urls": json.dumps([image_url] if image_url else []),
-        "is_sold": False,
-        "is_pending": False,
-        "listed_at": None,
+        "price": _parse_price(price_obj.get("amount")),
+        "currency": price_obj.get("currency") or "CAD",
+        "location_city": geo.get("city"),
+        "location_state": geo.get("state"),
+        "image_urls": json.dumps([]),
+        "is_sold": bool(record.get("is_sold", False)),
+        "is_pending": bool(record.get("is_pending", False)),
+        "listed_at": _parse_creation_time(record.get("creation_time")),
         "scraped_at": datetime.now(timezone.utc).isoformat(),
         "raw_payload": json.dumps(record),
     }
@@ -166,6 +167,7 @@ def _process_records(
     result: PipelineResult,
     event_id: uuid.UUID,
     event_key: str,
+    filter_keywords: list[str] | None = None,
 ) -> None:
     current_state = _load_current_state(session, event_id)
     logger.info(
@@ -177,8 +179,15 @@ def _process_records(
         listing_id = record.get("id")
         if not listing_id:
             result.errors += 1
-            logger.debug(f"Skipping record with no listing ID: {record.get('link')!r}")
+            logger.debug(f"Skipping record with no listing ID: {record.get('listingUrl')!r}")
             continue
+
+        # Keyword filter — skip records whose title doesn't contain any keyword
+        if filter_keywords:
+            title_lower = (record.get("marketplace_listing_title") or "").lower()
+            if not any(kw in title_lower for kw in filter_keywords):
+                result.skipped += 1
+                continue
 
         listing_id = str(listing_id)
         params = _build_params(record, db_run.id, event_id, event_key)
@@ -247,13 +256,17 @@ def run_from_records(
     event_id: uuid.UUID,
     event_key: str,
     mode: str = "periodic",
+    filter_keywords: list[str] | None = None,
 ) -> PipelineResult:
-    logger.info(f"[FB-Mkt Stage1] Starting — source: {source} mode: {mode} ({len(records)} records)")
+    logger.info(
+        f"[FB-Mkt Stage1] Starting — source: {source} mode: {mode} "
+        f"({len(records)} records, keywords={filter_keywords})"
+    )
 
     with SessionLocal() as session:
         db_run = _create_run(session, source, event_key, event_id, mode)
         result = PipelineResult(run_id=db_run.id, status="completed")
-        _process_records(session, db_run, records, result, event_id, event_key)
+        _process_records(session, db_run, records, result, event_id, event_key, filter_keywords)
         _finish_run(session, db_run, result)
 
     logger.info(

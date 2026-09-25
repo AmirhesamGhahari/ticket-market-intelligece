@@ -1,4 +1,4 @@
-"""Facebook Marketplace (futurafree actor) pipeline CLI.
+"""Facebook Marketplace (datavoyantlab actor) pipeline CLI.
 
 Commands:
     run-facebook-new from-config --config olivia_rodrigo_toronto_oct2026 --mode initial
@@ -25,7 +25,7 @@ from sqlalchemy import text
 
 from ticket_tracker.config import settings
 from ticket_tracker.db.engine import SessionLocal
-from ticket_tracker.sources.facebook_new.scraper import FuturafreeRunner, build_run_input
+from ticket_tracker.sources.facebook_new.scraper import DatavoyantlabRunner, build_run_input
 from ticket_tracker.sources.facebook_new.stage1 import run_from_records, PipelineResult
 from ticket_tracker.sources.facebook_new.stage2_classify import run as run_classify, ClassifyResult
 
@@ -109,7 +109,7 @@ def _print_classify_result(title: str, result: ClassifyResult, elapsed: float) -
 
 @click.group()
 def cli() -> None:
-    """Ticket Market Intelligence — Facebook Marketplace (futurafree) pipeline."""
+    """Ticket Market Intelligence — Facebook Marketplace (datavoyantlab) pipeline."""
     _run_migrations()
 
 
@@ -150,28 +150,32 @@ def from_config(config_name: str, mode: str, stage: str) -> None:
 
     if stage in ("scrape", "all"):
         mode_cfg = fb_config[f"{mode}_run"]
-        runner   = FuturafreeRunner(settings.apify_api_token, fb_config["actor_id"])
+        runner   = DatavoyantlabRunner(settings.apify_api_token, fb_config["actor_id"])
 
-        all_records: list[dict] = []
-        for term in fb_config["search_terms"]:
-            run_input = build_run_input(
-                search_terms=[term],
-                latitude=str(fb_config["latitude"]),
-                longitude=str(fb_config["longitude"]),
-                min_price=str(fb_config.get("min_price", "0")),
-                max_price=str(fb_config.get("max_price", "10000")),
-                days_listed=int(mode_cfg["days_listed"]),
-                listings_per_search=int(mode_cfg["listings_per_search"]),
-                search_radius_km=fb_config.get("search_radius_km"),
-                use_deduplication=bool(mode_cfg.get("use_deduplication", False)),
-                filter_keywords=fb_config.get("filter_keywords") or None,
-            )
-            logger.info(f"[FB-New] {config_name!r} mode={mode!r} term={term!r}")
-            all_records.extend(runner.run(run_input))
+        run_input = build_run_input(
+            marketplace_urls=fb_config["marketplace_urls"],
+            max_items=int(mode_cfg["max_items"]),
+            fetch_item_details=bool(mode_cfg.get("fetch_item_details", False)),
+            deduplicate_across_runs=bool(mode_cfg.get("deduplicate_across_runs", False)),
+            stop_on_first_page_all_duplicates=bool(mode_cfg.get("stop_on_first_page_all_duplicates", False)),
+        )
+        logger.info(
+            f"[FB-New] {config_name!r} mode={mode!r} "
+            f"urls={len(fb_config['marketplace_urls'])} max_items={mode_cfg['max_items']}"
+        )
+        all_records = runner.run(run_input)
+
+        filter_keywords = [k.lower() for k in fb_config.get("filter_keywords", [])]
 
         t0            = time.monotonic()
-        scrape_result = run_from_records(all_records, source=f"{config_name}:{mode}",
-                                         event_id=event_id, event_key=config["event_key"], mode=mode)
+        scrape_result = run_from_records(
+            all_records,
+            source=f"{config_name}:{mode}",
+            event_id=event_id,
+            event_key=config["event_key"],
+            mode=mode,
+            filter_keywords=filter_keywords or None,
+        )
         _print_scrape_result("FB Marketplace — Stage 1 (Scrape)", scrape_result, time.monotonic() - t0)
 
     if stage in ("classify", "all"):

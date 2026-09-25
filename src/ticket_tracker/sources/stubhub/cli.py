@@ -20,7 +20,6 @@ from sqlalchemy import text
 
 from ticket_tracker.config import settings
 from ticket_tracker.db.engine import SessionLocal
-from ticket_tracker.sfn import report_failure, report_success
 from ticket_tracker.sources.stubhub.scraper import scrape_event
 from ticket_tracker.sources.stubhub.stage1 import run_from_items, PipelineResult
 
@@ -108,7 +107,6 @@ def from_config(config_name: str, show_date: str) -> None:
 
         if not sh_config.get("enabled", False):
             console.print("[yellow]stubhub source is disabled in this config.[/yellow]")
-            report_success({"new_count": 0, "updated_count": 0, "skipped_count": 0, "error_count": 0})
             return
 
         event_id = _resolve_event(config)
@@ -136,17 +134,10 @@ def from_config(config_name: str, show_date: str) -> None:
                                 event_key=config["event_key"], show_date=show_date)
         _print_result("StubHub — Stage 1", result, time.monotonic() - t0)
 
-        report_success({
-            "new_count":     result.newly_added,
-            "updated_count": result.change_added,
-            "skipped_count": result.skipped,
-            "error_count":   result.errors,
-        })
         console.print(Rule(f"[dim]Done in {time.monotonic() - total_start:.1f}s[/dim]"))
         console.print()
 
     except Exception as exc:
-        report_failure(type(exc).__name__, str(exc))
         raise
 
 

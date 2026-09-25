@@ -25,7 +25,6 @@ from sqlalchemy import text
 
 from ticket_tracker.config import settings
 from ticket_tracker.db.engine import SessionLocal
-from ticket_tracker.sfn import report_failure, report_success
 from ticket_tracker.sources.facebook_new.scraper import FuturafreeRunner, build_run_input
 from ticket_tracker.sources.facebook_new.stage1 import run_from_records, PipelineResult
 from ticket_tracker.sources.facebook_new.stage2_classify import run as run_classify, ClassifyResult
@@ -146,7 +145,6 @@ def from_config(config_name: str, mode: str, stage: str) -> None:
 
         if not fb_config.get("enabled", False):
             console.print(f"[yellow]facebook_new is disabled for {config_name!r} — skipping.[/yellow]")
-            report_success({"new_count": 0, "updated_count": 0, "skipped_count": 0, "error_count": 0, "classified_count": 0})
             return
 
         event_id = _resolve_event(config)
@@ -182,18 +180,10 @@ def from_config(config_name: str, mode: str, stage: str) -> None:
             classify_result = run_classify(event_id=event_id, event_key=config["event_key"])
             _print_classify_result("FB Marketplace — Stage 2 (Classify)", classify_result, time.monotonic() - t0)
 
-        report_success({
-            "new_count":        scrape_result.newly_added   if scrape_result   else 0,
-            "updated_count":    scrape_result.change_added  if scrape_result   else 0,
-            "skipped_count":    scrape_result.skipped       if scrape_result   else 0,
-            "error_count":      scrape_result.errors        if scrape_result   else 0,
-            "classified_count": classify_result.classified  if classify_result else 0,
-        })
         console.print(Rule(f"[dim]Done in {time.monotonic() - total_start:.1f}s[/dim]"))
         console.print()
 
     except Exception as exc:
-        report_failure(type(exc).__name__, str(exc))
         raise
 
 

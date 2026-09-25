@@ -61,22 +61,6 @@ resource "aws_iam_role" "task" {
   })
 }
 
-# Allows the ECS container to call back to Step Functions with task results.
-# Required for the waitForTaskToken pattern — the container calls
-# send_task_success or send_task_failure before it exits.
-resource "aws_iam_role_policy" "task_sfn_callback" {
-  name = "sfn-task-callback"
-  role = aws_iam_role.task.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect   = "Allow"
-      Action   = ["states:SendTaskSuccess", "states:SendTaskFailure"]
-      Resource = ["*"]   # token-scoped, cannot restrict to a specific state machine
-    }]
-  })
-}
 
 resource "aws_ecs_task_definition" "pipeline" {
   family                   = "${var.app_name}-pipeline"

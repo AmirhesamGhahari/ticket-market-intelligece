@@ -44,18 +44,11 @@ resource "aws_iam_role_policy" "lambda_policy" {
 
   policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [
-      {
-        Effect   = "Allow"
-        Action   = ["dynamodb:GetItem", "dynamodb:BatchGetItem", "dynamodb:UpdateItem", "dynamodb:PutItem"]
-        Resource = [aws_dynamodb_table.pipeline_state.arn]
-      },
-      {
-        Effect   = "Allow"
-        Action   = ["cloudwatch:PutMetricData"]
-        Resource = ["*"]
-      }
-    ]
+    Statement = [{
+      Effect   = "Allow"
+      Action   = ["dynamodb:BatchGetItem"]
+      Resource = [aws_dynamodb_table.pipeline_state.arn]
+    }]
   })
 }
 
@@ -120,16 +113,16 @@ resource "aws_iam_role_policy" "sfn_policy" {
         Action   = ["iam:PassRole"]
         Resource = [var.execution_role_arn, var.task_role_arn]
       },
-      # Required for ECS .waitForTaskToken — SFN manages an internal EventBridge rule
-      {
-        Effect   = "Allow"
-        Action   = ["events:PutTargets", "events:PutRule", "events:DescribeRule"]
-        Resource = ["arn:aws:events:*:*:rule/StepFunctionsGetEventsForECSTaskRule"]
-      },
       {
         Effect   = "Allow"
         Action   = ["lambda:InvokeFunction"]
         Resource = [aws_lambda_function.fanout.arn]
+      },
+      {
+        # Direct DynamoDB integration — marks mode=periodic after each successful ECS task
+        Effect   = "Allow"
+        Action   = ["dynamodb:UpdateItem"]
+        Resource = [aws_dynamodb_table.pipeline_state.arn]
       },
       {
         Effect = "Allow"
@@ -160,20 +153,21 @@ locals {
   # Input to each iteration: {"task": {"command": [...], "state_key": "...", "mode": "..."}}
   #
   # Flow:
-  #   LaunchTask (waitForTaskToken) — injects TASK_TOKEN into ECS container env var.
-  #     The ECS task calls send_task_success({stats}) or send_task_failure(error, cause).
-  #     ResultPath=$.result merges the callback payload into the current state.
+  #   LaunchTask (.sync:2) — SFN launches the ECS task and polls until it exits.
+  #     Exit code 0 = success → SetModePeriodic.
+  #     Timeout (1h) or non-zero exit → Catch → Done (skip, try next item).
   #
-  #   RecordSuccess / RecordFailure — one Lambda (record_result action) updates DynamoDB.
+  #   SetModePeriodic — direct DynamoDB UpdateItem, no Lambda needed.
+  #     Sets mode = "periodic" so the next execution knows the first run succeeded.
   #
-  #   Done — terminal Pass state so the Map item always ends cleanly.
+  #   Done — terminal Pass state.
   task_iterator = {
     StartAt = "LaunchTask"
     States = {
       LaunchTask = {
-        Type             = "Task"
-        Resource         = "arn:aws:states:::ecs:runTask.waitForTaskToken"
-        HeartbeatSeconds = 3600   # if ECS task crashes without calling back, fail after 1h
+        Type           = "Task"
+        Resource       = "arn:aws:states:::ecs:runTask.sync:2"
+        TimeoutSeconds = 3600
         Parameters = {
           LaunchType     = "FARGATE"
           Cluster        = var.ecs_cluster_arn
@@ -189,66 +183,39 @@ locals {
             ContainerOverrides = [{
               Name        = "pipeline"
               "Command.$" = "$.task.command"
-              Environment = [{
-                Name      = "TASK_TOKEN"
-                "Value.$" = "$$.Task.Token"
-              }]
             }]
           }
         }
-        ResultPath = "$.result"   # callback payload lands here; $.task stays intact
-        Next       = "RecordSuccess"
-        Retry = [{
-          ErrorEquals     = ["ECS.EcsException"]
-          IntervalSeconds = 15
-          MaxAttempts     = 2
-          BackoffRate     = 2
-        }]
+        ResultPath = null
+        Next       = "SetModePeriodic"
         Catch = [{
           ErrorEquals = ["States.ALL"]
-          ResultPath  = "$.error"
-          Next        = "RecordFailure"
+          ResultPath  = null
+          Next        = "Done"
         }]
       }
 
-      RecordSuccess = {
+      SetModePeriodic = {
         Type     = "Task"
-        Resource = "arn:aws:states:::lambda:invoke"
+        Resource = "arn:aws:states:::dynamodb:updateItem"
         Parameters = {
-          FunctionName = local.lambda_arn
-          Payload = {
-            action        = "record_result"
-            outcome       = "success"
-            "state_key.$" = "$.task.state_key"
-            "mode.$"      = "$.task.mode"
-            "stats.$"     = "$.result"
+          TableName = aws_dynamodb_table.pipeline_state.name
+          Key = {
+            pk = { "S.$" = "$.task.state_key" }
           }
+          UpdateExpression          = "SET #m = :periodic"
+          ExpressionAttributeNames  = { "#m" = "mode" }
+          ExpressionAttributeValues = { ":periodic" = { "S" = "periodic" } }
         }
         ResultPath = null
-        Retry      = local.lambda_retry
-        Catch      = [{ ErrorEquals = ["States.ALL"], ResultPath = null, Next = "Done" }]
         Next       = "Done"
+        Catch = [{
+          ErrorEquals = ["States.ALL"]
+          ResultPath  = null
+          Next        = "Done"
+        }]
       }
 
-      RecordFailure = {
-        Type     = "Task"
-        Resource = "arn:aws:states:::lambda:invoke"
-        Parameters = {
-          FunctionName = local.lambda_arn
-          Payload = {
-            action        = "record_result"
-            outcome       = "failure"
-            "state_key.$" = "$.task.state_key"
-            "error.$"     = "$.error"
-          }
-        }
-        ResultPath = null
-        Retry      = local.lambda_retry
-        Catch      = [{ ErrorEquals = ["States.ALL"], ResultPath = null, Next = "Done" }]
-        Next       = "Done"
-      }
-
-      # Always reached — ensures the Map item never "fails" from SFN's perspective.
       Done = { Type = "Pass", End = true }
     }
   }

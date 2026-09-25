@@ -26,7 +26,6 @@ from sqlalchemy import text
 
 from ticket_tracker.config import settings
 from ticket_tracker.db.engine import SessionLocal
-from ticket_tracker.sfn import report_failure, report_success
 from ticket_tracker.sources.facebook_legacy.scraper import ApifyRunner
 from ticket_tracker.sources.facebook_legacy.stage1 import run as run_stage1
 from ticket_tracker.sources.facebook_legacy.stage1 import run_from_records as run_stage1_from_records
@@ -194,7 +193,6 @@ def from_apify(config_name: str, mode: str, stage: str) -> None:
 
         if not legacy_cfg.get("enabled", False):
             console.print(f"[yellow]facebook_legacy is disabled for {config_name!r} — skipping.[/yellow]")
-            report_success({"new_count": 0, "updated_count": 0, "skipped_count": 0, "error_count": 0, "classified_count": 0})
             return
 
         event_id = _resolve_event(config)
@@ -220,18 +218,10 @@ def from_apify(config_name: str, mode: str, stage: str) -> None:
             result2 = run_classify(event_id=event_id, event_key=config["event_key"])
             _print_classify_result("STAGE 2 — LLM Classify", result2, time.monotonic() - t0)
 
-        report_success({
-            "new_count":        result1.newly_added  if result1 else 0,
-            "updated_count":    result1.change_added if result1 else 0,
-            "skipped_count":    result1.skipped      if result1 else 0,
-            "error_count":      result1.errors       if result1 else 0,
-            "classified_count": result2.classified   if result2 else 0,
-        })
         console.print(Rule(f"[dim]Done in {time.monotonic() - total_start:.1f}s[/dim]"))
         console.print()
 
     except Exception as exc:
-        report_failure(type(exc).__name__, str(exc))
         raise
 
 

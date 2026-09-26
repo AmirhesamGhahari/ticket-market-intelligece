@@ -50,16 +50,13 @@ sources:
       - "https://www.facebook.com/marketplace/toronto/search/?query=phoebe+bridgers&exact=false"
       - "https://www.facebook.com/marketplace/toronto/search/?query=phoebe+bridgers+ticket&exact=false"
       - "https://www.facebook.com/marketplace/toronto/search/?query=phoebe+bridgers+toronto&exact=false"
-      - "https://www.facebook.com/marketplace/toronto/search/?query=phoebe+bridgers+october&exact=false"
-      - "https://www.facebook.com/marketplace/toronto/search/?query=phoebe+bridgers+oct+1&exact=false"
-      - "https://www.facebook.com/marketplace/toronto/search/?query=phoebe+bridgers+oct+2&exact=false"
     initial_run:
       max_items: 1000
       fetch_item_details: false
       deduplicate_across_runs: true
       stop_on_first_page_all_duplicates: false
     periodic_run:
-      max_items: 500
+      max_items: 200
       fetch_item_details: false
       deduplicate_across_runs: true
       stop_on_first_page_all_duplicates: true

@@ -42,15 +42,13 @@ sources:
       - "https://www.facebook.com/marketplace/toronto/search/?query=jonas+brothers&exact=false"
       - "https://www.facebook.com/marketplace/toronto/search/?query=jonas+brothers+ticket&exact=false"
       - "https://www.facebook.com/marketplace/toronto/search/?query=jonas+brothers+toronto&exact=false"
-      - "https://www.facebook.com/marketplace/toronto/search/?query=jonas+brothers+september&exact=false"
-      - "https://www.facebook.com/marketplace/toronto/search/?query=jonas+brothers+2026&exact=false"
     initial_run:
       max_items: 1000
       fetch_item_details: false
       deduplicate_across_runs: true
       stop_on_first_page_all_duplicates: false
     periodic_run:
-      max_items: 500
+      max_items: 200
       fetch_item_details: false
       deduplicate_across_runs: true
       stop_on_first_page_all_duplicates: true
@@ -60,5 +58,5 @@ sources:
     event_id: null
 
   stubhub:
-    enabled: false
+    enabled: true
     event_url: https://www.stubhub.com/jonas-brothers-toronto-tickets-9-28-2026/event/161867558/?quantity=0

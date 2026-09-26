@@ -41,16 +41,13 @@ sources:
     marketplace_urls:
       - "https://www.facebook.com/marketplace/toronto/search/?query=beabadoobee&exact=false"
       - "https://www.facebook.com/marketplace/toronto/search/?query=beabadoobee+ticket&exact=false"
-      - "https://www.facebook.com/marketplace/toronto/search/?query=beabadoobee+toronto&exact=false"
-      - "https://www.facebook.com/marketplace/toronto/search/?query=beabadoobee+october&exact=false"
-      - "https://www.facebook.com/marketplace/toronto/search/?query=bea+toronto+ticket&exact=false"
     initial_run:
       max_items: 1000
       fetch_item_details: false
       deduplicate_across_runs: true
       stop_on_first_page_all_duplicates: false
     periodic_run:
-      max_items: 500
+      max_items: 200
       fetch_item_details: false
       deduplicate_across_runs: true
       stop_on_first_page_all_duplicates: true

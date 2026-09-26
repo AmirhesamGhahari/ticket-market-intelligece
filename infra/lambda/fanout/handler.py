@@ -55,6 +55,15 @@ def lambda_handler(event, context):
 def _task_producer(event: dict) -> dict:
     now = datetime.now(timezone.utc)
 
+    # Manual passthrough: if tasks are fully specified in the input, skip generation
+    # and return them directly. Useful for triggering specific configs from the console.
+    # Example input:
+    #   {"tasks": {"facebook_legacy": [], "facebook_new": [{"command": [...], "state_key": "...", "mode": "initial"}], "stubhub": []}}
+    if "tasks" in event:
+        run = event.get("run", "manual")
+        print(f"[PASSTHROUGH] run={run} tasks={event['tasks']}")
+        return {"run": run, "tasks": event["tasks"]}
+
     # Manual override: pass {"run": "morning"} when starting SFN from the console
     run = event.get("run")
     if run not in ("morning", "evening"):

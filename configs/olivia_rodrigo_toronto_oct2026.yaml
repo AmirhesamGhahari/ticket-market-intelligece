@@ -41,15 +41,15 @@ sources:
     filter_keywords: ["olivia"]
     marketplace_urls:
       - "https://www.facebook.com/marketplace/toronto/search/?query=olivia+rodrigo&exact=false"
-      - "https://www.facebook.com/marketplace/toronto/search/?query=olivia+rodrigo+ticket&exact=false"
-      - "https://www.facebook.com/marketplace/toronto/search/?query=guts+tour+ticket&exact=false"
+      - "https://www.facebook.com/marketplace/toronto/search/?query=olivia+rodrigo+ticket&exact=true"
+      - "https://www.facebook.com/marketplace/toronto/search/?query=guts+tour+ticket&exact=true"
     initial_run:
       max_items: 1000
       fetch_item_details: false
       deduplicate_across_runs: true
       stop_on_first_page_all_duplicates: false
     periodic_run:
-      max_items: 200
+      max_items: 100
       fetch_item_details: false
       deduplicate_across_runs: true
       stop_on_first_page_all_duplicates: true

@@ -39,15 +39,15 @@ sources:
     actor_id: "datavoyantlab/Facebook-marketplace-scraper"
     filter_keywords: ["gorillaz"]
     marketplace_urls:
-      - "https://www.facebook.com/marketplace/toronto/search/?query=gorillaz&exact=false"
-      - "https://www.facebook.com/marketplace/toronto/search/?query=gorillaz+ticket&exact=false"
+      - "https://www.facebook.com/marketplace/toronto/search/?query=gorillaz&exact=true"
+      - "https://www.facebook.com/marketplace/toronto/search/?query=gorillaz+ticket&exact=true"
     initial_run:
       max_items: 1000
       fetch_item_details: false
       deduplicate_across_runs: true
       stop_on_first_page_all_duplicates: false
     periodic_run:
-      max_items: 200
+      max_items: 100
       fetch_item_details: false
       deduplicate_across_runs: true
       stop_on_first_page_all_duplicates: true
